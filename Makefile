@@ -15,7 +15,7 @@ endif
 all: fmt build start
 
 build:
-	GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-database-mock cmd/vault-plugin-database-mock/main.go
+	GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-database-kuma cmd/vault-plugin-database-kuma/main.go
 
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
@@ -23,19 +23,19 @@ start:
 enable:
 	vault secrets enable database
 
-	vault write database/config/mock \
-    plugin_name=vault-plugin-database-mock \
-		allowed_roles="mock-role" \
+	vault write database/config/kuma \
+    plugin_name=vault-plugin-database-kuma \
+		allowed_roles="kuma-role" \
     username="vault" \
     password="vault" \
-    connection_url="mock.local:1234"
+    connection_url="kuma.local:1234"
 
-	vault write database/roles/mock-role \
-    db_name=mock \
+	vault write database/roles/kuma-role \
+    db_name=kuma \
     default_ttl="5m" \
     max_ttl="24h"
 clean:
-	rm -f ./vault/plugins/vault-plugin-database-mock
+	rm -f ./vault/plugins/vault-plugin-database-kuma
 
 fmt:
 	go fmt $$(go list ./...)
