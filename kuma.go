@@ -1,4 +1,4 @@
-package mock
+package kuma
 
 import (
 	"context"
@@ -13,19 +13,19 @@ const (
 	defaultUserCreationCQL   = `CREATE USER '{{username}}' WITH PASSWORD '{{password}}' NOSUPERUSER;`
 	defaultUserDeletionCQL   = `DROP USER '{{username}}';`
 	defaultChangePasswordCQL = `ALTER USER '{{username}}' WITH PASSWORD '{{password}}';`
-	mockTypeName             = "mock"
+	kumaTypeName             = "kuma"
 
 	defaultUserNameTemplate = `{{ printf "v_%s_%s_%s_%s" (.DisplayName | truncate 15) (.RoleName | truncate 15) (random 20) (unix_time) | truncate 100 | replace "-" "_" | lowercase }}`
 )
 
 // backend wraps the backend framework and adds a map for storing key value pairs
-type Mock struct {
-	*mockConnectionProducer
+type Kuma struct {
+	*kumaConnectionProducer
 
 	usernameProducer template.StringTemplate
 }
 
-// New returns a new Mock instance
+// New returns a new Kuma instance
 func New() (interface{}, error) {
 	db := new()
 	dbType := dbplugin.NewDatabaseErrorSanitizerMiddleware(db, db.secretValues)
@@ -33,18 +33,18 @@ func New() (interface{}, error) {
 	return dbType, nil
 }
 
-func new() *Mock {
-	connProducer := &mockConnectionProducer{}
-	connProducer.Type = mockTypeName
+func new() *Kuma {
+	connProducer := &kumaConnectionProducer{}
+	connProducer.Type = kumaTypeName
 
-	return &Mock{
-		mockConnectionProducer: connProducer,
+	return &Kuma{
+		kumaConnectionProducer: connProducer,
 	}
 }
 
 // Initialize the database plugin. This is the equivalent of a constructor for the
 // database object itself.
-func (m *Mock) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
+func (m *Kuma) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
 	usernameTemplate, err := strutil.GetString(req.Config, "username_template")
 	if err != nil {
 		return dbplugin.InitializeResponse{}, fmt.Errorf("failed to retrieve username_template: %w", err)
@@ -59,20 +59,20 @@ func (m *Mock) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (
 	}
 	m.usernameProducer = up
 
-	return m.mockConnectionProducer.Initialize(ctx, req)
+	return m.kumaConnectionProducer.Initialize(ctx, req)
 }
 
 // Type returns the Name for the particular database backend implementation.
 // This type name is usually set as a constant within the database backend
 // implementation, e.g. "mysql" for the MySQL database backend. This is used
 // for things like metrics and logging. No behavior is switched on this.
-func (n *Mock) Type() (string, error) {
-	return mockTypeName, nil
+func (n *Kuma) Type() (string, error) {
+	return kumaTypeName, nil
 }
 
 // NewUser creates a new user within the database. This user is temporary in that it
 // will exist until the TTL expires.
-func (m *Mock) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplugin.NewUserResponse, error) {
+func (m *Kuma) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplugin.NewUserResponse, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -96,7 +96,7 @@ func (m *Mock) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplug
 }
 
 // UpdateUser updates an existing user within the database.
-func (m *Mock) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
+func (m *Kuma) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -119,7 +119,7 @@ func (m *Mock) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (
 
 // DeleteUser from the database. This should not error if the user didn't
 // exist prior to this call.
-func (m *Mock) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest) (dbplugin.DeleteUserResponse, error) {
+func (m *Kuma) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest) (dbplugin.DeleteUserResponse, error) {
 	m.Lock()
 	defer m.Unlock()
 

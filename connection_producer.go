@@ -1,4 +1,4 @@
-package mock
+package kuma
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
 )
 
-// mockConnectionProducer implements ConnectionProducer and provides an
-// interface for mock databases to make connections.
-type mockConnectionProducer struct {
+// kumaConnectionProducer implements ConnectionProducer and provides an
+// interface for kuma databases to make connections.
+type kumaConnectionProducer struct {
 	Username      string `json:"username" structs:"username"`
 	Password      string `json:"password" structs:"password"`
 	ConnectionURL string `json:"connection_url" structs:"connection_url"`
@@ -20,18 +20,18 @@ type mockConnectionProducer struct {
 
 	Initialized bool
 	Type        string
-	client      *MockClient
+	client      *KumaClient
 	sync.Mutex
 }
 
-func (p *mockConnectionProducer) secretValues() map[string]string {
+func (p *kumaConnectionProducer) secretValues() map[string]string {
 	return map[string]string{
 		p.Username: "[username]",
 		p.Password: "[password]",
 	}
 }
 
-func (p *mockConnectionProducer) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
+func (p *kumaConnectionProducer) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
 	p.Lock()
 	defer p.Unlock()
 
@@ -55,7 +55,7 @@ func (p *mockConnectionProducer) Initialize(ctx context.Context, req dbplugin.In
 }
 
 // Connection creates a database connection
-func (m *mockConnectionProducer) Connection(ctx context.Context) (*MockClient, error) {
+func (m *kumaConnectionProducer) Connection(ctx context.Context) (*KumaClient, error) {
 	if !m.Initialized {
 		return nil, connutil.ErrNotInitialized
 	}
@@ -76,8 +76,8 @@ func (m *mockConnectionProducer) Connection(ctx context.Context) (*MockClient, e
 	return m.client, nil
 }
 
-func (m *mockConnectionProducer) createClient() (*MockClient, error) {
-	c, err := NewMockClient(m.ConnectionURL, m.Username, m.Password)
+func (m *kumaConnectionProducer) createClient() (*KumaClient, error) {
+	c, err := NewKumaClient(m.ConnectionURL, m.Username, m.Password)
 
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func (m *mockConnectionProducer) createClient() (*MockClient, error) {
 }
 
 // Close terminates the database connection.
-func (m *mockConnectionProducer) Close() error {
+func (m *kumaConnectionProducer) Close() error {
 	m.Lock()
 	defer m.Unlock()
 
