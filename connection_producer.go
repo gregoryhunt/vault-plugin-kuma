@@ -10,10 +10,10 @@ import (
 )
 
 // kumaConnectionProducer implements ConnectionProducer and provides an
-// interface for kuma databases to make connections.
+// interface for kuma to make connections with the control plane.
 type kumaConnectionProducer struct {
 	Username      string `json:"username" structs:"username"`
-	Password      string `json:"password" structs:"password"`
+	Token         string `json:"token" structs:"token"`
 	ConnectionURL string `json:"connection_url" structs:"connection_url"`
 
 	rawConfig map[string]interface{}
@@ -27,7 +27,7 @@ type kumaConnectionProducer struct {
 func (p *kumaConnectionProducer) secretValues() map[string]string {
 	return map[string]string{
 		p.Username: "[username]",
-		p.Password: "[password]",
+		p.Token:    "[token]",
 	}
 }
 
@@ -54,13 +54,13 @@ func (p *kumaConnectionProducer) Initialize(ctx context.Context, req dbplugin.In
 	return resp, nil
 }
 
-// Connection creates a database connection
+// Connection creates a kuma control plane connection
 func (m *kumaConnectionProducer) Connection(ctx context.Context) (*KumaClient, error) {
 	if !m.Initialized {
 		return nil, connutil.ErrNotInitialized
 	}
 
-	// If we already have a DB, return it
+	// If we already have a client, return it
 	if m.client != nil {
 		return m.client, nil
 	}
@@ -77,7 +77,7 @@ func (m *kumaConnectionProducer) Connection(ctx context.Context) (*KumaClient, e
 }
 
 func (m *kumaConnectionProducer) createClient() (*KumaClient, error) {
-	c, err := NewKumaClient(m.ConnectionURL, m.Username, m.Password)
+	c, err := NewKumaClient(m.ConnectionURL, m.Username, m.Token)
 
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (m *kumaConnectionProducer) createClient() (*KumaClient, error) {
 	return &c, nil
 }
 
-// Close terminates the database connection.
+// Close terminates the client.
 func (m *kumaConnectionProducer) Close() error {
 	m.Lock()
 	defer m.Unlock()
