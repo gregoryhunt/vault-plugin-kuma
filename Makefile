@@ -15,7 +15,7 @@ endif
 all: fmt build start
 
 build:
-	GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
+	GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-database-kuma cmd/vault-plugin-kuma/main.go
 
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
