@@ -3,32 +3,31 @@ package kuma
 import "fmt"
 
 type kumaUser struct {
-	Username string
-	Password string
+	Username string //TODO might need a better name as the represents Users and Services
+	Token    string
 }
 
-// A kuma database client used as an example, in a real world this
-// would be an external library provided by a database provider.
+// A kuma control plane client
 type KumaClient struct {
 	Username string
-	Password string
+	Token    string
 	URL      string
-	users    map[string]kumaUser
+	users    map[string]kumaUser //TODO User and Services both leverage tokens
 }
 
-func NewKumaClient(url, username, password string) (KumaClient, error) {
-	return KumaClient{URL: url, Username: username, Password: password, users: make(map[string]kumaUser)}, nil
+func NewKumaClient(url, username, token string) (KumaClient, error) {
+	return KumaClient{URL: url, Username: username, Token: token, users: make(map[string]kumaUser)}, nil
 }
 
-func (c *KumaClient) CreateUser(username, password string) kumaUser {
-	user := kumaUser{Username: username, Password: password}
+func (c *KumaClient) CreateUser(username, token string) kumaUser {
+	user := kumaUser{Username: username, Token: token}
 	c.users[username] = user
 	return user
 }
 
-func (c *KumaClient) UpdateUser(username, password string) error {
+func (c *KumaClient) UpdateUser(username, token string) error {
 	if val, ok := c.users[username]; ok {
-		val.Password = password
+		val.Token = token
 		c.users[username] = val
 		return nil
 	}

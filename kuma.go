@@ -27,6 +27,7 @@ type Kuma struct {
 
 // New returns a new Kuma instance
 func New() (interface{}, error) {
+	// Replace with httpClient for control plane access
 	db := new()
 	dbType := dbplugin.NewDatabaseErrorSanitizerMiddleware(db, db.secretValues)
 
@@ -42,7 +43,7 @@ func new() *Kuma {
 	}
 }
 
-// Initialize the database plugin. This is the equivalent of a constructor for the
+// Initialize the kuma plugin. This is the equivalent of a constructor for the
 // database object itself.
 func (m *Kuma) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
 	usernameTemplate, err := strutil.GetString(req.Config, "username_template")
@@ -62,16 +63,14 @@ func (m *Kuma) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (
 	return m.kumaConnectionProducer.Initialize(ctx, req)
 }
 
-// Type returns the Name for the particular database backend implementation.
-// This type name is usually set as a constant within the database backend
-// implementation, e.g. "mysql" for the MySQL database backend. This is used
-// for things like metrics and logging. No behavior is switched on this.
+// Type returns the Name for the kuma backend implementation.
+// This is used for things like metrics and logging.  No behavior is switched on this.
 func (n *Kuma) Type() (string, error) {
 	return kumaTypeName, nil
 }
 
-// NewUser creates a new user within the database. This user is temporary in that it
-// will exist until the TTL expires.
+// NewUser/Service creates a new user/service within the kuma dataplane. This user/service
+// is temporary in that it will exist until the TTL expires.
 func (m *Kuma) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplugin.NewUserResponse, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -95,7 +94,7 @@ func (m *Kuma) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplug
 	return resp, nil
 }
 
-// UpdateUser updates an existing user within the database.
+// UpdateUser updates an existing user/servv=ice within the dataplane.
 func (m *Kuma) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -117,8 +116,8 @@ func (m *Kuma) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (
 	return dbplugin.UpdateUserResponse{}, nil
 }
 
-// DeleteUser from the database. This should not error if the user didn't
-// exist prior to this call.
+// DeleteUser from the dataplane ie. add the user/service to the revocation list.
+// This should not error if the user didn't exist prior to this call.
 func (m *Kuma) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest) (dbplugin.DeleteUserResponse, error) {
 	m.Lock()
 	defer m.Unlock()
