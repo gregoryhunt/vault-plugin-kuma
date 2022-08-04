@@ -45,7 +45,7 @@ func (r *harborRoleEntry) toResponseData() map[string]interface{} {
 
 // pathRoles extends the Vault API with a `/roles`
 // endpoint for the backend.
-func pathRoles(b *harborBackend) []*framework.Path {
+func pathRoles(b *kumaBackend) []*framework.Path {
 	return []*framework.Path{
 		{
 			Pattern: "roles/" + framework.GenericNameRegex("name"),
@@ -100,7 +100,7 @@ func pathRoles(b *harborBackend) []*framework.Path {
 }
 
 // pathRolesList makes a request to Vault storage to retrieve a list of roles for the backend
-func (b *harborBackend) pathRolesList(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) pathRolesList(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	entries, err := req.Storage.List(ctx, "role/")
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func (b *harborBackend) pathRolesList(ctx context.Context, req *logical.Request,
 }
 
 // pathRolesRead makes a request to Vault storage to read a role and return response data
-func (b *harborBackend) pathRolesRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) pathRolesRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	entry, err := b.getRole(ctx, req.Storage, d.Get("name").(string))
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (b *harborBackend) pathRolesRead(ctx context.Context, req *logical.Request,
 }
 
 // pathRolesWrite makes a request to Vault storage to update a role based on the attributes passed to the role configuration
-func (b *harborBackend) pathRolesWrite(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	name, ok := d.GetOk("name")
 	if !ok {
 		return logical.ErrorResponse("missing role name"), nil
@@ -179,7 +179,7 @@ func (b *harborBackend) pathRolesWrite(ctx context.Context, req *logical.Request
 }
 
 // pathRolesDelete makes a request to Vault storage to delete a role
-func (b *harborBackend) pathRolesDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) pathRolesDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	err := req.Storage.Delete(ctx, "role/"+d.Get("name").(string))
 	if err != nil {
 		return nil, fmt.Errorf("error deleting harbor role: %w", err)
@@ -207,7 +207,7 @@ func setRole(ctx context.Context, s logical.Storage, name string, roleEntry *har
 }
 
 // getRole gets the role from the Vault storage API
-func (b *harborBackend) getRole(ctx context.Context, s logical.Storage, name string) (*harborRoleEntry, error) {
+func (b *kumaBackend) getRole(ctx context.Context, s logical.Storage, name string) (*harborRoleEntry, error) {
 	if name == "" {
 		return nil, fmt.Errorf("missing role name")
 	}

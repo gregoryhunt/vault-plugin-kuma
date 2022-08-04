@@ -15,7 +15,7 @@ const (
 
 // harborToken defines a secret to store for a given role
 // and how it should be revoked or renewed.
-func (b *harborBackend) harborToken() *framework.Secret {
+func (b *kumaBackend) harborToken() *framework.Secret {
 	return &framework.Secret{
 		Type: harborRobotAccountType,
 		Fields: map[string]*framework.FieldSchema{
@@ -30,7 +30,7 @@ func (b *harborBackend) harborToken() *framework.Secret {
 }
 
 // tokenRevoke removes the token from the Vault storage API and calls the client to revoke the robot account
-func (b *harborBackend) robotAccountRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) robotAccountRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	client, err := b.getClient(ctx, req.Storage)
 	if err != nil {
 		return nil, err
@@ -61,18 +61,18 @@ func (b *harborBackend) robotAccountRevoke(ctx context.Context, req *logical.Req
 }
 
 // deleteToken calls the Harbor client to delete the robot account
-func deleteRobotAccount(ctx context.Context, c *harborClient, robotAccountName string) error {
-	err := c.RESTClient.DeleteRobotAccountByName(ctx, robotAccountName)
+func deleteRobotAccount(ctx context.Context, c *kumaClient, robotAccountName string) error {
+	//err := c.RESTClient.DeleteRobotAccountByName(ctx, robotAccountName)
 
-	if err != nil {
-		return err
-	}
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }
 
 // robotAccountRenew
-func (b *harborBackend) robotAccountRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) robotAccountRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	roleRaw, ok := req.Secret.InternalData["role"]
 	if !ok {
 		return nil, fmt.Errorf("secret is missing role internal data")

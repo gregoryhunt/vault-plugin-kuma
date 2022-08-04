@@ -3,42 +3,54 @@ package kuma
 import (
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/kumahq/kuma/app/kumactl/pkg/client"
+	"github.com/kumahq/kuma/app/kumactl/pkg/tokens"
+	config_proto "github.com/kumahq/kuma/pkg/config/app/kumactl/v1alpha1"
+	util_http "github.com/kumahq/kuma/pkg/util/http"
 )
 
 // harborClient creates an object storing
 // the client.
-type harborClient struct {
-	*harbor.RESTClient
+type kumaClient struct {
+	client tokens.DataplaneTokenClient
 }
 
 // newClient creates a new client to access harbor
 // and exposes it for any secrets or roles to use.
-func newClient(config *kumaConfig) (*harborClient, error) {
+func newClient(config *kumaConfig) (*kumaClient, error) {
 	if config == nil {
 		return nil, errors.New("client configuration was nil")
 	}
 
-	if config.Username == "" {
-		return nil, errors.New("client username was not defined")
-	}
-
-	if config.Password == "" {
-		return nil, errors.New("client password was not defined")
+	if config.Token == "" {
+		return nil, errors.New("client token is not defined")
 	}
 
 	if config.URL == "" {
-		return nil, errors.New("client URL was not defined")
+		return nil, errors.New("client API server URL is not defined")
 	}
 
-	c, err := harbor.NewRESTClientForHost(
-		fmt.Sprintf("%s/api/v2.0", config.URL),
-		config.Username,
-		config.Password,
-		&harborCfg.Options{PageSize: 100},
-	)
+	apiclient, err := baseAPIServerClient(config.URL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create base API client: %s", err)
+	}
+
+	c := tokens.NewDataplaneTokenClient(apiclient)
+
+	return &kumaClient{c}, nil
+}
+
+func baseAPIServerClient(url string) (util_http.Client, error) {
+
+	conf := &config_proto.ControlPlaneCoordinates_ApiServer{}
+	conf.Url = url
+
+	c, err := client.ApiServerClient(conf, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	return &harborClient{c}, nil
+	return c, nil
 }
