@@ -1,45 +1,44 @@
 package kuma
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
-type kumaUser struct {
-	Username string //TODO might need a better name as the represents Users and Services
-	Token    string
+// harborClient creates an object storing
+// the client.
+type harborClient struct {
+	*harbor.RESTClient
 }
 
-// A kuma control plane client
-type KumaClient struct {
-	Username string
-	Token    string
-	URL      string
-	users    map[string]kumaUser //TODO User and Services both leverage tokens
-}
-
-func NewKumaClient(url, username, token string) (KumaClient, error) {
-	return KumaClient{URL: url, Username: username, Token: token, users: make(map[string]kumaUser)}, nil
-}
-
-func (c *KumaClient) CreateUser(username, token string) kumaUser {
-	user := kumaUser{Username: username, Token: token}
-	c.users[username] = user
-	return user
-}
-
-func (c *KumaClient) UpdateUser(username, token string) error {
-	if val, ok := c.users[username]; ok {
-		val.Token = token
-		c.users[username] = val
-		return nil
+// newClient creates a new client to access harbor
+// and exposes it for any secrets or roles to use.
+func newClient(config *kumaConfig) (*harborClient, error) {
+	if config == nil {
+		return nil, errors.New("client configuration was nil")
 	}
 
-	return fmt.Errorf("user does not exist")
-}
-
-func (c *KumaClient) DeleteUser(username string) error {
-	if _, ok := c.users[username]; ok {
-		delete(c.users, username)
-		return nil
+	if config.Username == "" {
+		return nil, errors.New("client username was not defined")
 	}
 
-	return fmt.Errorf("user does not exist")
+	if config.Password == "" {
+		return nil, errors.New("client password was not defined")
+	}
+
+	if config.URL == "" {
+		return nil, errors.New("client URL was not defined")
+	}
+
+	c, err := harbor.NewRESTClientForHost(
+		fmt.Sprintf("%s/api/v2.0", config.URL),
+		config.Username,
+		config.Password,
+		&harborCfg.Options{PageSize: 100},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &harborClient{c}, nil
 }

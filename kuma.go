@@ -2,131 +2,101 @@ package kuma
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
-	"github.com/hashicorp/vault/sdk/helper/strutil"
-	"github.com/hashicorp/vault/sdk/helper/template"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
-	defaultUserCreationCQL   = `CREATE USER '{{username}}' WITH PASSWORD '{{password}}' NOSUPERUSER;`
-	defaultUserDeletionCQL   = `DROP USER '{{username}}';`
-	defaultChangePasswordCQL = `ALTER USER '{{username}}' WITH PASSWORD '{{password}}';`
-	kumaTypeName             = "kuma"
-
-	defaultUserNameTemplate = `{{ printf "v_%s_%s_%s_%s" (.DisplayName | truncate 15) (.RoleName | truncate 15) (random 20) (unix_time) | truncate 100 | replace "-" "_" | lowercase }}`
+	harborRobotAccountType = "robot_account"
 )
 
-// backend wraps the backend framework and adds a map for storing key value pairs
-type Kuma struct {
-	*kumaConnectionProducer
-
-	usernameProducer template.StringTemplate
-}
-
-// New returns a new Kuma instance
-func New() (interface{}, error) {
-	// Replace with httpClient for control plane access
-	db := new()
-	dbType := dbplugin.NewDatabaseErrorSanitizerMiddleware(db, db.secretValues)
-
-	return dbType, nil
-}
-
-func new() *Kuma {
-	connProducer := &kumaConnectionProducer{}
-	connProducer.Type = kumaTypeName
-
-	return &Kuma{
-		kumaConnectionProducer: connProducer,
+// harborToken defines a secret to store for a given role
+// and how it should be revoked or renewed.
+func (b *harborBackend) harborToken() *framework.Secret {
+	return &framework.Secret{
+		Type: harborRobotAccountType,
+		Fields: map[string]*framework.FieldSchema{
+			"robot_account": {
+				Type:        framework.TypeString,
+				Description: "Harbor Robot account",
+			},
+		},
+		Revoke: b.robotAccountRevoke,
+		Renew:  b.robotAccountRenew,
 	}
 }
 
-// Initialize the kuma plugin. This is the equivalent of a constructor for the
-// database object itself.
-func (m *Kuma) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
-	usernameTemplate, err := strutil.GetString(req.Config, "username_template")
+// tokenRevoke removes the token from the Vault storage API and calls the client to revoke the robot account
+func (b *harborBackend) robotAccountRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+	client, err := b.getClient(ctx, req.Storage)
 	if err != nil {
-		return dbplugin.InitializeResponse{}, fmt.Errorf("failed to retrieve username_template: %w", err)
+		return nil, err
 	}
-	if usernameTemplate == "" {
-		usernameTemplate = defaultUserNameTemplate
+	if client == nil {
+		return nil, fmt.Errorf("error getting Harbor client")
 	}
 
-	up, err := template.NewTemplate(template.Template(usernameTemplate))
-	if err != nil {
-		return dbplugin.InitializeResponse{}, fmt.Errorf("unable to initialize username template: %w", err)
+	var account string
+	// We passed the account using InternalData from when we first created
+	// the secret. This is because the Harbor API uses the exact robot account name
+	// for revocation.
+	accountRaw, ok := req.Secret.InternalData["robot_account_name"]
+	if !ok {
+		return nil, fmt.Errorf("robot_account_name is missing on the lease")
 	}
-	m.usernameProducer = up
 
-	return m.kumaConnectionProducer.Initialize(ctx, req)
+	account, ok = accountRaw.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable convert robot_account_name")
+	}
+
+	if err := deleteRobotAccount(ctx, client, account); err != nil {
+		return nil, fmt.Errorf("error revoking robot account: %w", err)
+	}
+
+	return nil, nil
 }
 
-// Type returns the Name for the kuma backend implementation.
-// This is used for things like metrics and logging.  No behavior is switched on this.
-func (n *Kuma) Type() (string, error) {
-	return kumaTypeName, nil
+// deleteToken calls the Harbor client to delete the robot account
+func deleteRobotAccount(ctx context.Context, c *harborClient, robotAccountName string) error {
+	err := c.RESTClient.DeleteRobotAccountByName(ctx, robotAccountName)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// NewUser/Service creates a new user/service within the kuma dataplane. This user/service
-// is temporary in that it will exist until the TTL expires.
-func (m *Kuma) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplugin.NewUserResponse, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	username, err := m.usernameProducer.Generate(req.UsernameConfig)
-	if err != nil {
-		return dbplugin.NewUserResponse{}, err
+// robotAccountRenew
+func (b *harborBackend) robotAccountRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+	roleRaw, ok := req.Secret.InternalData["role"]
+	if !ok {
+		return nil, fmt.Errorf("secret is missing role internal data")
 	}
 
-	client, err := m.Connection(ctx)
+	// get the role entry
+	role := roleRaw.(string)
+	roleEntry, err := b.getRole(ctx, req.Storage, role)
 	if err != nil {
-		return dbplugin.NewUserResponse{}, err
+		return nil, fmt.Errorf("error retrieving role: %w", err)
 	}
 
-	user := client.CreateUser(username, req.Password)
+	if roleEntry == nil {
+		return nil, errors.New("error retrieving role: role is nil")
+	}
 
-	resp := dbplugin.NewUserResponse{
-		Username: user.Username,
+	resp := &logical.Response{Secret: req.Secret}
+
+	if roleEntry.TTL > 0 {
+		resp.Secret.TTL = roleEntry.TTL
+	}
+	if roleEntry.MaxTTL > 0 {
+		resp.Secret.MaxTTL = roleEntry.MaxTTL
 	}
 
 	return resp, nil
-}
-
-// UpdateUser updates an existing user/servv=ice within the dataplane.
-func (m *Kuma) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	if req.Password == nil {
-		return dbplugin.UpdateUserResponse{}, fmt.Errorf("no changes requested")
-	}
-
-	client, err := m.Connection(ctx)
-	if err != nil {
-		return dbplugin.UpdateUserResponse{}, err
-	}
-
-	err = client.UpdateUser(req.Username, req.Password.NewPassword)
-	if err != nil {
-		return dbplugin.UpdateUserResponse{}, err
-	}
-
-	return dbplugin.UpdateUserResponse{}, nil
-}
-
-// DeleteUser from the dataplane ie. add the user/service to the revocation list.
-// This should not error if the user didn't exist prior to this call.
-func (m *Kuma) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest) (dbplugin.DeleteUserResponse, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	client, err := m.Connection(ctx)
-	if err != nil {
-		return dbplugin.DeleteUserResponse{}, err
-	}
-
-	err = client.DeleteUser(req.Username)
-	return dbplugin.DeleteUserResponse{}, err
 }
