@@ -15,7 +15,7 @@ const (
 
 // harborToken defines a secret to store for a given role
 // and how it should be revoked or renewed.
-func (b *kumaBackend) harborToken() *framework.Secret {
+func (b *kumaBackend) kumaToken() *framework.Secret {
 	return &framework.Secret{
 		Type: harborRobotAccountType,
 		Fields: map[string]*framework.FieldSchema{

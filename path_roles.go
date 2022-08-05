@@ -9,36 +9,38 @@ import (
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 	"github.com/hashicorp/vault/sdk/logical"
-	harborModel "github.com/mittwald/goharbor-client/v5/apiv2/model"
 )
 
 const (
-	pathRoleHelpSynopsis    = `Manages the Vault role for generating Harbor robot account tokens.`
+	pathRoleHelpSynopsis    = `Manages the Vault role for generating Kuma tokens.`
 	pathRoleHelpDescription = `
-This path allows you to read and write roles used to generate Harbor robot account tokens.
-You can configure a role to manage a robot account's token by setting the permissions field.
+This path allows you to read and write roles used to generate Kuma tokens.
+You can configure a role to manage a user or service token by setting the permissions field.
 `
 
 	pathRoleListHelpSynopsis    = `List the existing roles in Harbor backend`
 	pathRoleListHelpDescription = `Roles will be listed by the role name.`
 )
 
-// harborRoleEntry defines the data required
+// kumaRoleEntry defines the data required
 // for a Vault role to access and call the Harbor
 // token endpoints
-type harborRoleEntry struct {
-	TTL         time.Duration                  `json:"ttl"`
-	MaxTTL      time.Duration                  `json:"max_ttl"`
-	Permissions []*harborModel.RobotPermission `json:"permissions"`
+type kumaRoleEntry struct {
+	Mesh   string            `json:"mesh"`
+	Tags   map[string]string `json:"tags"`
+	TTL    time.Duration     `json:"ttl"`
+	MaxTTL time.Duration     `json:"max_ttl"`
+	//Permissions []*harborModel.RobotPermission `json:"permissions"`
 }
 
 // toResponseData returns response data for a role
-func (r *harborRoleEntry) toResponseData() map[string]interface{} {
-	p, _ := json.Marshal(r.Permissions)
+func (r *kumaRoleEntry) toResponseData() map[string]interface{} {
+	t, _ := json.Marshal(r.Tags)
 	respData := map[string]interface{}{
-		"ttl":         r.TTL.Seconds(),
-		"max_ttl":     r.MaxTTL.Seconds(),
-		"permissions": string(p),
+		"mesh":    r.Mesh,
+		"tags":    string(t),
+		"ttl":     r.TTL.Seconds(),
+		"max_ttl": r.MaxTTL.Seconds(),
 	}
 	return respData
 }
@@ -55,9 +57,13 @@ func pathRoles(b *kumaBackend) []*framework.Path {
 					Description: "Name of the role",
 					Required:    true,
 				},
-				"permissions": {
+				"mesh": {
 					Type:        framework.TypeString,
-					Description: "The permissions for the Harbor robot account",
+					Description: "The Mesh to provision token in",
+				},
+				"tags": {
+					Type:        framework.TypeString,
+					Description: "The tags for the Kuma token",
 					Required:    true,
 				},
 				"ttl": {
@@ -138,19 +144,19 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 	}
 
 	if roleEntry == nil {
-		roleEntry = &harborRoleEntry{}
+		roleEntry = &kumaRoleEntry{}
 	}
 
 	createOperation := (req.Operation == logical.CreateOperation)
 
-	if permissions, ok := d.GetOk("permissions"); ok {
-		parsedPermissions := make([]*harborModel.RobotPermission, 0) // non-nil to avoid a "missing permissions" error later
+	if tags, ok := d.GetOk("tags"); ok {
+		parsedTags := make(map[string]string, 0) // non-nil to avoid a "missing tags" error later
 
-		err := jsonutil.DecodeJSON([]byte(permissions.(string)), &parsedPermissions)
+		err := jsonutil.DecodeJSON([]byte(tags.(string)), &parsedTags)
 		if err != nil {
-			return logical.ErrorResponse("error parsing Permissions '%s': %s", permissions.(string), err.Error()), nil
+			return logical.ErrorResponse("error parsing Tags '%s': %s", tags.(string), err.Error()), nil
 		}
-		roleEntry.Permissions = parsedPermissions
+		roleEntry.Tags = parsedTags
 	} else if !ok && createOperation {
 		return nil, fmt.Errorf("missing permissions in role")
 	}
@@ -189,7 +195,7 @@ func (b *kumaBackend) pathRolesDelete(ctx context.Context, req *logical.Request,
 }
 
 // setRole adds the role to the Vault storage API
-func setRole(ctx context.Context, s logical.Storage, name string, roleEntry *harborRoleEntry) error {
+func setRole(ctx context.Context, s logical.Storage, name string, roleEntry *kumaRoleEntry) error {
 	entry, err := logical.StorageEntryJSON("role/"+name, roleEntry)
 	if err != nil {
 		return err
@@ -207,7 +213,7 @@ func setRole(ctx context.Context, s logical.Storage, name string, roleEntry *har
 }
 
 // getRole gets the role from the Vault storage API
-func (b *kumaBackend) getRole(ctx context.Context, s logical.Storage, name string) (*harborRoleEntry, error) {
+func (b *kumaBackend) getRole(ctx context.Context, s logical.Storage, name string) (*kumaRoleEntry, error) {
 	if name == "" {
 		return nil, fmt.Errorf("missing role name")
 	}
@@ -221,7 +227,7 @@ func (b *kumaBackend) getRole(ctx context.Context, s logical.Storage, name strin
 		return nil, nil
 	}
 
-	var role harborRoleEntry
+	var role kumaRoleEntry
 
 	if err := entry.DecodeJSON(&role); err != nil {
 		return nil, err
