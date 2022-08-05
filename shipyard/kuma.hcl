@@ -1,5 +1,5 @@
 module "kuma_cp" {
-  source = "github.com/gregoryhunt/kuma-blueprint?ref=c3bced6ca949da16367aa08887b17c6a074eb61f"
+  source = "github.com/gregoryhunt/kuma-blueprint?ref=499db086de2b4791975f1d732cd28e481dc2fa4f"
 }
 
 variable "kuma_cp_network" {

@@ -1,12 +1,8 @@
 module "vault" {
-  source = "github.com/shipyard-run/blueprints?ref=46ff6abb218b75386af4c71e2d700279b540343b/modules//vault-dev"
+  source = "github.com/shipyard-run/blueprints?ref=f235847a73c5bb81943aaed8f0c526edee693d75/modules//vault-dev"
 }
 
 variable "vault_network" {
-  default = "local"
-}
-
-variable "vault_plugin_folder" {
-  default = "${file_dir()}/../vault/plugins"
+  default = "dc1"
 }
 
