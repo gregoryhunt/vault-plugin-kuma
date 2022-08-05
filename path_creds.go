@@ -81,10 +81,11 @@ func (b *kumaBackend) createCreds(
 
 	robotAccountName := fmt.Sprintf("vault.%s.%s%d", roleName, displayName, time.Now().UnixNano())
 
-	//	robotAccount, err := b.createRobotAccount(ctx, req.Storage, robotAccountName, role)
-	//	if err != nil {
-	//		return nil, err
-	//	}
+	// if role.Groups
+	//b.client.clientTokenClient.Generate
+
+	// if role.Tags
+	//b.client.dpTokenClient.Generate
 
 	// The response is divided into two objects (1) internal data and (2) data.
 	resp := b.Secret(kumaTokenAccountType).Response(map[string]interface{}{}, map[string]interface{}{
