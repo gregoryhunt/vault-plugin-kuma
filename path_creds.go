@@ -13,11 +13,9 @@ import (
 
 const (
 	// nolint:gosec
-	pathCredsHelpSyn  = `Generate a Harbor robot account from a specific Vault role.`
-	pathCredsHelpDesc = `This path generates a Harbor robot account
-based on a particular role.`
-
-	dayHours = float64(24)
+	pathCredsHelpSyn  = `Generate a Kuma token from a specific Vault role.`
+	pathCredsHelpDesc = `This path generates a Kuma token based on a particular role.`
+	dayHours          = float64(24)
 )
 
 // harborRobotAccount defines a secret for the Harbor token
