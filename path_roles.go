@@ -2,12 +2,10 @@ package kuma
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
@@ -26,19 +24,20 @@ You can configure a role to manage a user or service token by setting the permis
 // for a Vault role to access and call the Harbor
 // token endpoints
 type kumaRoleEntry struct {
-	Mesh   string            `json:"mesh"`
-	Tags   map[string]string `json:"tags"`
-	TTL    time.Duration     `json:"ttl"`
-	MaxTTL time.Duration     `json:"max_ttl"`
+	Mesh   string        `json:"mesh"`
+	Tags   tagsMap       `json:"tags"`
+	TTL    time.Duration `json:"ttl"`
+	MaxTTL time.Duration `json:"max_ttl"`
 	//Permissions []*harborModel.RobotPermission `json:"permissions"`
 }
 
 // toResponseData returns response data for a role
 func (r *kumaRoleEntry) toResponseData() map[string]interface{} {
-	t, _ := json.Marshal(r.Tags)
+	t := r.Tags.ToString()
+
 	respData := map[string]interface{}{
 		"mesh":    r.Mesh,
-		"tags":    string(t),
+		"tags":    t,
 		"ttl":     r.TTL.Seconds(),
 		"max_ttl": r.MaxTTL.Seconds(),
 	}
@@ -149,15 +148,20 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 
 	createOperation := (req.Operation == logical.CreateOperation)
 
-	if tags, ok := d.GetOk("tags"); ok {
-		parsedTags := make(map[string]string, 0) // non-nil to avoid a "missing tags" error later
+	if mesh, ok := d.GetOk("mesh"); ok {
+		roleEntry.Mesh = mesh.(string)
+	} else if createOperation {
+		roleEntry.Mesh = "default"
+	}
 
-		err := jsonutil.DecodeJSON([]byte(tags.(string)), &parsedTags)
+	if t, ok := d.GetOk("tags"); ok {
+		parsedTags, err := tagsString(t.(string)).ToMap()
 		if err != nil {
-			return logical.ErrorResponse("error parsing Tags '%s': %s", tags.(string), err.Error()), nil
+			return nil, fmt.Errorf("unable to parse tags %s", t)
 		}
+
 		roleEntry.Tags = parsedTags
-	} else if !ok && createOperation {
+	} else {
 		return nil, fmt.Errorf("missing permissions in role")
 	}
 

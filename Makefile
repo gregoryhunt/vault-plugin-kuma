@@ -20,6 +20,9 @@ build:
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
+restart_vault_shipyard:
+	shipyard taint container.vault && shipyard run --no-browser ./shipyard
+
 enable:
 	vault secrets enable -path=kuma vault-plugin-kuma || true
 
@@ -28,8 +31,10 @@ enable:
     url=" kuma-cp.container.shipyard.run:5681" \
 		token="$(KUMA_TOKEN)"
 
+	# How to differentiate between user token role and dataplane role
 	vault write kuma/roles/kuma-role \
     mesh=default \
+		tags="kuma.io/service=backend,kuma.io/service=backend-admin"
     ttl="5m" \
     max_ttl="24h"
 clean:

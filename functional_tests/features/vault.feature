@@ -11,6 +11,7 @@ Feature: Kuma User Tokens
       {
         "mesh": "default",
         "ttl": "1h",
+        "tags": "kuma.io/service=backend,kuma.io/service=backend-admin",
         "max_ttl": "24h"
       }
       ```
@@ -19,6 +20,7 @@ Feature: Kuma User Tokens
       {
         "mesh": "default",
         "ttl": "1h",
-        "max_ttl": "24h"
+        "max_ttl": "24h",
+        "tags": "kuma.io/service=backend,kuma.io/service=backend-admin"
       }
       ```
