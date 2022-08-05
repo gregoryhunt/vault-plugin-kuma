@@ -9,6 +9,10 @@ import (
 )
 
 func TestGeneratesUserToken(t *testing.T) {
+	if os.Getenv("TEST_ACC") != "1" {
+		t.Skip()
+	}
+
 	config := &kumaConfig{
 		Token: os.Getenv("KUMA_TOKEN"),
 		URL:   "http://localhost:5681",
@@ -24,6 +28,10 @@ func TestGeneratesUserToken(t *testing.T) {
 }
 
 func TestGeneratesDataplaneToken(t *testing.T) {
+	if os.Getenv("TEST_ACC") != "1" {
+		t.Skip()
+	}
+
 	config := &kumaConfig{
 		Token: os.Getenv("KUMA_TOKEN"),
 		URL:   "http://localhost:5681",
