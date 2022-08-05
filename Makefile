@@ -21,21 +21,22 @@ start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
 enable:
-	vault secrets enable database
+	vault secrets enable -path=kuma vault-plugin-kuma || true
 
-	vault write database/config/kuma \
-    plugin_name=vault-plugin-kuma \
+	vault write kuma/config \
 		allowed_roles="kuma-role" \
-    username="vault" \
-    password="vault" \
-    connection_url="kuma.local:1234"
+    url=" kuma-cp.container.shipyard.run:5681" \
+		token="$(KUMA_TOKEN)"
 
-	vault write database/roles/kuma-role \
-    db_name=kuma \
-    default_ttl="5m" \
+	vault write kuma/roles/kuma-role \
+    mesh=default \
+    ttl="5m" \
     max_ttl="24h"
 clean:
 	rm -f ./vault/plugins/*
+
+tests:
+	cd functional_tests && go run main.go
 
 fmt:
 	go fmt $$(go list ./...)

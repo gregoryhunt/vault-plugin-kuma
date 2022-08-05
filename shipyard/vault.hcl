@@ -1,5 +1,5 @@
 module "vault" {
-  source = "github.com/shipyard-run/blueprints?ref=81fa351a4bd62cba284f0b5cb78e6ac8844e2ecd/modules//vault-dev"
+  source = "github.com/shipyard-run/blueprints?ref=144a4b75e44a8471d1f9b30d6f8a30c8d9e05e7e/modules//vault-dev"
 }
 
 variable "vault_network" {
