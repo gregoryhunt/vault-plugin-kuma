@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -159,7 +160,21 @@ func iExpectTheRoleToExistWithTheFollowingData(arg1 string, arg2 *godog.DocStrin
 
 	body, _ := ioutil.ReadAll(resp.Body)
 
-	return fmt.Errorf(string(body))
+	j := map[string]interface{}{}
+	json.Unmarshal(body, &j)
+
+	data := j["data"].(map[string]interface{})
+
+	testData := map[string]interface{}{}
+	json.Unmarshal([]byte(arg2.Content), &testData)
+
+	for k, v := range data {
+		if v != testData[k] {
+			return fmt.Errorf("Expected data for %s value %v, got %v", k, v, testData[k])
+		}
+	}
+
+	return nil
 }
 
 func theExampleEnvironmentIsRunning() error {

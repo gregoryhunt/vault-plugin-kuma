@@ -40,7 +40,7 @@ enable:
 clean:
 	rm -f ./vault/plugins/*
 
-tests:
+tests: build
 	cd functional_tests && go run main.go
 
 fmt:
