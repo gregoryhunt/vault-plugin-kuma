@@ -15,7 +15,7 @@ endif
 all: fmt build start
 
 build:
-	GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
@@ -35,7 +35,7 @@ enable:
     default_ttl="5m" \
     max_ttl="24h"
 clean:
-	rm -f ./vault/plugins/vault-plugin-kuma
+	rm -f ./vault/plugins/*
 
 fmt:
 	go fmt $$(go list ./...)

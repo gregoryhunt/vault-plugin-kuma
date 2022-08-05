@@ -64,13 +64,13 @@ func (b *kumaBackend) pathCredsRead(ctx context.Context, req *logical.Request, d
 	return b.createCreds(ctx, req, roleName, roleEntry)
 }
 
-// createCreds creates a new Harbor robot account to store into the Vault backend, generates
+// createCreds creates a new Kuma access token to store into the Vault backend, generates
 // a response with the robot account information, and checks the TTL and MaxTTL attributes.
 func (b *kumaBackend) createCreds(
 	ctx context.Context,
 	req *logical.Request,
 	roleName string,
-	role *harborRoleEntry) (*logical.Response, error) {
+	role *kumaRoleEntry) (*logical.Response, error) {
 	var displayName string
 
 	if req.DisplayName != "" {
@@ -87,7 +87,7 @@ func (b *kumaBackend) createCreds(
 	//	}
 
 	// The response is divided into two objects (1) internal data and (2) data.
-	resp := b.Secret(harborRobotAccountType).Response(map[string]interface{}{}, map[string]interface{}{
+	resp := b.Secret(kumaTokenAccountType).Response(map[string]interface{}{}, map[string]interface{}{
 		"role":               roleName,
 		"robot_account_name": robotAccountName,
 	})

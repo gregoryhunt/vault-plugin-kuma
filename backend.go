@@ -56,7 +56,7 @@ func backend() *kumaBackend {
 			},
 		),
 		Secrets: []*framework.Secret{
-			//b.kumaToken(),
+			b.kumaToken(),
 		},
 		BackendType: logical.TypeLogical,
 		Invalidate:  b.invalidate,

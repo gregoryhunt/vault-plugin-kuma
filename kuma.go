@@ -10,27 +10,27 @@ import (
 )
 
 const (
-	harborRobotAccountType = "robot_account"
+	kumaTokenAccountType = "kuma_token"
 )
 
 // harborToken defines a secret to store for a given role
 // and how it should be revoked or renewed.
 func (b *kumaBackend) kumaToken() *framework.Secret {
 	return &framework.Secret{
-		Type: harborRobotAccountType,
+		Type: kumaTokenAccountType,
 		Fields: map[string]*framework.FieldSchema{
-			"robot_account": {
+			"kuma_token": {
 				Type:        framework.TypeString,
-				Description: "Harbor Robot account",
+				Description: "Kuma access token",
 			},
 		},
-		Revoke: b.robotAccountRevoke,
-		Renew:  b.robotAccountRenew,
+		Revoke: b.tokenRevoke,
+		Renew:  b.tokenRenew,
 	}
 }
 
 // tokenRevoke removes the token from the Vault storage API and calls the client to revoke the robot account
-func (b *kumaBackend) robotAccountRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) tokenRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	client, err := b.getClient(ctx, req.Storage)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func deleteRobotAccount(ctx context.Context, c *kumaClient, robotAccountName str
 }
 
 // robotAccountRenew
-func (b *kumaBackend) robotAccountRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *kumaBackend) tokenRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	roleRaw, ok := req.Secret.InternalData["role"]
 	if !ok {
 		return nil, fmt.Errorf("secret is missing role internal data")
