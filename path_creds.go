@@ -41,6 +41,8 @@ func pathCreds(b *kumaBackend) *framework.Path {
 		Callbacks: map[logical.Operation]framework.OperationFunc{
 			logical.ReadOperation:   b.pathCredsRead,
 			logical.UpdateOperation: b.pathCredsRead,
+			//logical.RevokeOperation,
+			//logical.DeleteOperation,
 		},
 		HelpSynopsis:    pathCredsHelpSyn,
 		HelpDescription: pathCredsHelpDesc,

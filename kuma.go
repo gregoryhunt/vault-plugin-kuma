@@ -36,25 +36,25 @@ func (b *kumaBackend) tokenRevoke(ctx context.Context, req *logical.Request, d *
 		return nil, err
 	}
 	if client == nil {
-		return nil, fmt.Errorf("error getting Harbor client")
+		return nil, fmt.Errorf("error getting Kuma client")
 	}
 
 	var account string
 	// We passed the account using InternalData from when we first created
 	// the secret. This is because the Harbor API uses the exact robot account name
 	// for revocation.
-	accountRaw, ok := req.Secret.InternalData["robot_account_name"]
+	accountRaw, ok := req.Secret.InternalData["kuma_token_name"]
 	if !ok {
-		return nil, fmt.Errorf("robot_account_name is missing on the lease")
+		return nil, fmt.Errorf("kuma_token_name is missing on the lease")
 	}
 
 	account, ok = accountRaw.(string)
 	if !ok {
-		return nil, fmt.Errorf("unable convert robot_account_name")
+		return nil, fmt.Errorf("unable convert kuma_token_name")
 	}
 
 	if err := deleteRobotAccount(ctx, client, account); err != nil {
-		return nil, fmt.Errorf("error revoking robot account: %w", err)
+		return nil, fmt.Errorf("error revoking kuma token: %w", err)
 	}
 
 	return nil, nil
