@@ -1,5 +1,4 @@
-GOARCH = amd64
-
+ARCH = $(shell uname -m)
 UNAME = $(shell uname -s)
 
 ifndef OS
@@ -7,6 +6,18 @@ ifndef OS
 		OS = linux
 	else ifeq ($(UNAME), Darwin)
 		OS = darwin
+	endif
+endif
+
+ifndef GOARCH
+	ifeq ($(ARCH), aarch64)
+		GOARCH = arm64
+	else ifeq ($(ARCH), amd64)
+		GOARCH = amd64
+	else ifeq ($(ARCH), arm64)
+		GOARCH = arm64
+	else
+		GOARCH = $(ARCH)
 	endif
 endif
 
@@ -40,7 +51,8 @@ enable:
 clean:
 	rm -f ./vault/plugins/*
 
-tests: build
+tests:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 	cd functional_tests && go run main.go
 
 fmt:
