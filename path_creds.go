@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"time"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
@@ -79,18 +78,26 @@ func (b *kumaBackend) createCreds(
 		displayName = fmt.Sprintf("%s.", dn)
 	}
 
-	robotAccountName := fmt.Sprintf("vault.%s.%s%d", roleName, displayName, time.Now().UnixNano())
-
+	//robotAccountName := fmt.Sprintf("vault.%s.%s%d", roleName, displayName, time.Now().UnixNano())
+	token := ""
 	// if role.Groups
 	//b.client.clientTokenClient.Generate
+	if len(role.Tags) > 0 {
+		t, err := b.client.dpTokenClient.Generate(displayName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
+		if err != nil {
+			return nil, fmt.Errorf("unable to generate token: %s", err)
+		}
+
+		token = t
+	}
 
 	// if role.Tags
 	//b.client.dpTokenClient.Generate
 
 	// The response is divided into two objects (1) internal data and (2) data.
 	resp := b.Secret(kumaTokenAccountType).Response(map[string]interface{}{}, map[string]interface{}{
-		"role":               roleName,
-		"robot_account_name": robotAccountName,
+		"role":  roleName,
+		"token": token,
 	})
 
 	if role.TTL > 0 {
