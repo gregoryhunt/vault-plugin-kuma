@@ -28,7 +28,6 @@ type kumaRoleEntry struct {
 	Tags   tagsMap       `json:"tags"`
 	TTL    time.Duration `json:"ttl"`
 	MaxTTL time.Duration `json:"max_ttl"`
-	//Permissions []*harborModel.RobotPermission `json:"permissions"`
 }
 
 // toResponseData returns response data for a role
@@ -38,8 +37,8 @@ func (r *kumaRoleEntry) toResponseData() map[string]interface{} {
 	respData := map[string]interface{}{
 		"mesh":    r.Mesh,
 		"tags":    t,
-		"ttl":     r.TTL.Seconds(),
-		"max_ttl": r.MaxTTL.Seconds(),
+		"ttl":     r.TTL.String(),
+		"max_ttl": r.MaxTTL.String(),
 	}
 	return respData
 }
@@ -157,28 +156,30 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 	if t, ok := d.GetOk("tags"); ok {
 		parsedTags, err := tagsString(t.(string)).ToMap()
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse tags %s", t)
+			return logical.ErrorResponse("unable to parse tags", "tags", t), logical.ErrInvalidRequest
 		}
 
 		roleEntry.Tags = parsedTags
 	} else {
-		return nil, fmt.Errorf("missing permissions in role")
+		return logical.ErrorResponse("missing permissions in role"), logical.ErrInvalidRequest
 	}
 
 	if ttlRaw, ok := d.GetOk("ttl"); ok {
 		roleEntry.TTL = time.Duration(ttlRaw.(int)) * time.Second
 	} else if createOperation {
-		roleEntry.TTL = time.Duration(d.Get("ttl").(int)) * time.Second
+		// if we do not pass a value and are doing a create, set the default to 24hrs
+		roleEntry.TTL = 24 * time.Hour
 	}
 
-	if maxTTLRaw, ok := d.GetOk("max_ttl"); ok {
-		roleEntry.MaxTTL = time.Duration(maxTTLRaw.(int)) * time.Second
+	if ttlRaw, ok := d.GetOk("max_ttl"); ok {
+		roleEntry.MaxTTL = time.Duration(ttlRaw.(int)) * time.Second
 	} else if createOperation {
-		roleEntry.MaxTTL = time.Duration(d.Get("max_ttl").(int)) * time.Second
+		// if we do not pass a value and are doing a create, set the default to 24hrs
+		roleEntry.MaxTTL = 24 * time.Hour
 	}
 
 	if roleEntry.MaxTTL != 0 && roleEntry.TTL > roleEntry.MaxTTL {
-		return logical.ErrorResponse("ttl cannot be greater than max_ttl"), nil
+		return logical.ErrorResponse("ttl cannot be greater than max_ttl"), logical.ErrInvalidRequest
 	}
 
 	if err := setRole(ctx, req.Storage, name.(string), roleEntry); err != nil {

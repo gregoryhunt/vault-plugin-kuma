@@ -13,7 +13,7 @@ const (
 	kumaTokenAccountType = "kuma_token"
 )
 
-// harborToken defines a secret to store for a given role
+// kumaToken defines a secret to store for a given role
 // and how it should be revoked or renewed.
 func (b *kumaBackend) kumaToken() *framework.Secret {
 	return &framework.Secret{

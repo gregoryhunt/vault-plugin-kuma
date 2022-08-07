@@ -12,10 +12,10 @@ endif
 ifndef GOARCH
 	ifeq ($(ARCH), aarch64)
 		GOARCH = arm64
-	else ifeq ($(ARCH), amd64)
-		GOARCH = amd64
 	else ifeq ($(ARCH), arm64)
 		GOARCH = arm64
+	else ifeq ($(ARCH), x86_64)
+		GOARCH = amd64
 	else
 		GOARCH = $(ARCH)
 	endif
@@ -32,6 +32,7 @@ start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
 restart_vault_shipyard:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 	shipyard taint container.vault && shipyard run --no-browser ./shipyard
 
 enable:
@@ -45,9 +46,13 @@ enable:
 	# How to differentiate between user token role and dataplane role
 	vault write kuma/roles/kuma-role \
     mesh=default \
-		tags="kuma.io/service=backend,kuma.io/service=backend-admin"
+		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
     ttl="5m" \
     max_ttl="24h"
+
+generate:
+	vault read kuma/creds/kuma-role
+
 clean:
 	rm -f ./vault/plugins/*
 

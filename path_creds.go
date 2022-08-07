@@ -73,6 +73,7 @@ func (b *kumaBackend) createCreds(
 	req *logical.Request,
 	roleName string,
 	role *kumaRoleEntry) (*logical.Response, error) {
+
 	var displayName string
 
 	if req.DisplayName != "" {
