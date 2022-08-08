@@ -40,7 +40,7 @@ enable:
 
 	vault write kuma/config \
 		allowed_roles="kuma-role" \
-    url=" kuma-cp.container.shipyard.run:5681" \
+		url="http://kuma-cp.container.shipyard.run:5681" \
 		token="$(KUMA_TOKEN)"
 
 	# How to differentiate between user token role and dataplane role

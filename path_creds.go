@@ -2,9 +2,12 @@ package kuma
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
@@ -16,14 +19,6 @@ const (
 	pathCredsHelpDesc = `This path generates a Kuma token based on a particular role.`
 	dayHours          = float64(24)
 )
-
-// harborRobotAccount defines a secret for the Harbor token
-type harborRobotAccount struct {
-	ID        int64  `json:"robot_account_id"`
-	Name      string `json:"robot_account_name"`
-	Secret    string `json:"robot_account_secret"`
-	AuthToken string `json:"robot_account_auth_token"`
-}
 
 // pathCreds extends the Vault API with a `/creds`
 // endpoint for a role.
@@ -40,8 +35,6 @@ func pathCreds(b *kumaBackend) *framework.Path {
 		Callbacks: map[logical.Operation]framework.OperationFunc{
 			logical.ReadOperation:   b.pathCredsRead,
 			logical.UpdateOperation: b.pathCredsRead,
-			//logical.RevokeOperation,
-			//logical.DeleteOperation,
 		},
 		HelpSynopsis:    pathCredsHelpSyn,
 		HelpDescription: pathCredsHelpDesc,
@@ -75,33 +68,63 @@ func (b *kumaBackend) createCreds(
 
 	var displayName string
 
+	b.Logger().Info("Create new token", "name", req.DisplayName, "operation", req.Operation)
+
 	if req.DisplayName != "" {
 		re := regexp.MustCompile("[^[:alnum:]._-]")
 		dn := re.ReplaceAllString(req.DisplayName, "-")
 		displayName = fmt.Sprintf("%s.", dn)
 	}
 
-	//robotAccountName := fmt.Sprintf("vault.%s.%s%d", roleName, displayName, time.Now().UnixNano())
+	// fetch a client instance, client is a property of backend but there is not guarantee that
+	// it has been instantiated
+	client, err := b.getClient(ctx, req.Storage)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("error getting Kuma client")
+	}
+
 	token := ""
-	// if role.Groups
-	//b.client.clientTokenClient.Generate
 	if len(role.Tags) > 0 {
-		t, err := b.client.dpTokenClient.Generate(displayName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
+		b.Logger().Info("Generate dataplane token", "tags", role.Tags)
+		t, err := client.dpTokenClient.Generate(displayName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
+
 		if err != nil {
-			return nil, fmt.Errorf("unable to generate token: %s", err)
+			return logical.ErrorResponse("unable to generate token", "error", err), nil
 		}
 
 		token = t
 	}
 
-	// if role.Tags
-	//b.client.dpTokenClient.Generate
+	// if role.Groups
+	//b.client.clientTokenClient.Generate
+
+	// parse the token to get the jti, we need this to revoke tokens
+	parts := strings.Split(token, ".")
+
+	var body map[string]interface{}
+	bodyBytes, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	json.Unmarshal(bodyBytes, &body)
+
+	tokenID := ""
+	if tid, ok := body["jti"].(string); ok {
+		tokenID = tid
+	} else {
+		return logical.ErrorResponse("generated token does not contain a jti"), nil
+	}
 
 	// The response is divided into two objects (1) internal data and (2) data.
-	resp := b.Secret(kumaTokenAccountType).Response(map[string]interface{}{}, map[string]interface{}{
-		"role":  roleName,
-		"token": token,
-	})
+	resp := b.Secret(kumaTokenAccountType).Response(
+		map[string]interface{}{
+			"token": token,
+		},
+		map[string]interface{}{
+			"role":     roleName,
+			"token_id": tokenID,
+		},
+	)
 
 	if role.TTL > 0 {
 		resp.Secret.TTL = role.TTL

@@ -64,14 +64,6 @@ func backend() *kumaBackend {
 	return &b
 }
 
-// reset clears any client configuration for a new
-// backend to be configured
-func (b *kumaBackend) reset() {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-	b.client = nil
-}
-
 // invalidate clears an existing client configuration in
 // the backend
 func (b *kumaBackend) invalidate(ctx context.Context, key string) {
@@ -80,22 +72,27 @@ func (b *kumaBackend) invalidate(ctx context.Context, key string) {
 	}
 }
 
-// getClient locks the backend as it configures and creates a
-// a new client for the target API
-func (b *kumaBackend) getClient(ctx context.Context, s logical.Storage) (*kumaClient, error) {
+func (b *kumaBackend) reset() {
 	b.lock.RLock()
 	unlockFunc := b.lock.RUnlock
 
 	// nolint:gocritic
 	defer func() { unlockFunc() }()
 
+	b.client = nil
+}
+
+// setupClient locks the backend as it configures and creates a
+// a new client for the target API
+func (b *kumaBackend) getClient(ctx context.Context, s logical.Storage) (*kumaClient, error) {
+	b.lock.RLock()
+	unlockFunc := b.lock.RUnlock
+
+	defer unlockFunc()
+
 	if b.client != nil {
 		return b.client, nil
 	}
-
-	b.lock.RUnlock()
-	b.lock.Lock()
-	unlockFunc = b.lock.Unlock
 
 	config, err := getConfig(ctx, s)
 	if err != nil {

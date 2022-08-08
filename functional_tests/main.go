@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -84,6 +85,22 @@ func initializeSuite(ctx *godog.TestSuiteContext) {
 		}
 
 		environment["KUMA_TOKEN"] = string(d)
+
+		if environment["KUMA_TOKEN"] == "" {
+			logger.Error("unable to fetch Kuma bootstrap token")
+			outputLog()
+			os.Exit(1)
+		}
+
+		configurePlugin()
+	})
+
+	ctx.ScenarioContext().After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+		if err != nil {
+			outputLog()
+		}
+
+		return ctx, nil
 	})
 
 	ctx.AfterSuite(func() {
@@ -113,8 +130,8 @@ func initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I create the Vault role "([^"]*)" with the following data$`, iCreateTheVaultRoleWithTheFollowingData)
 	ctx.Step(`^I expect the role "([^"]*)" to exist with the following data$`, iExpectTheRoleToExistWithTheFollowingData)
 
-	ctx.Step(`^the example environment is running$`, theExampleEnvironmentIsRunning)
-	ctx.Step(`^the plugin is enabled and configured$`, thePluginIsEnabledAndConfigured)
+	ctx.Step(`^I create a dataplane token for the role "([^"]*)"$`, iCreateADataplaneToken)
+	ctx.Step(`^I should be able to use this token to register the following dataplane$`, iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane)
 }
 
 func doVaultRequest(url, method, body string) (*http.Response, error) {
@@ -182,16 +199,14 @@ func theExampleEnvironmentIsRunning() error {
 	return nil
 }
 
-func thePluginIsEnabledAndConfigured() error {
+func configurePlugin() error {
 	req := `
     {
-      "type": "vault-plugin-kuma",
-      "options": {
-        "url": "kuma-cp.container.shipyard.run:5681",
-        "token": "` + environment["KUMA_TOKEN"] + `"
-      }
+      "type": "vault-plugin-kuma"
     }
   `
+
+	logger.Debug("configuring plugin", "req", req)
 
 	resp, err := doVaultRequest("sys/mounts/kuma", http.MethodPost, req)
 	if err != nil {
@@ -204,5 +219,49 @@ func thePluginIsEnabledAndConfigured() error {
 		return fmt.Errorf("Expected status code 204 when creating Vault config, got %d, err: %s", resp.StatusCode, string(body))
 	}
 
+	req = `{
+    "url": "http://kuma-cp.container.shipyard.run:5681",
+    "token": "` + environment["KUMA_TOKEN"] + `"
+  }`
+
+	resp, err = doVaultRequest("kuma/config", http.MethodPost, req)
+	if err != nil {
+		return err
+	}
+
+	body, _ = ioutil.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("Expected status code 204 when creating Vault config, got %d, err: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
+}
+
+var lastToken = ""
+
+func iCreateADataplaneToken(arg1 string) error {
+	resp, err := doVaultRequest("kuma/creds/"+arg1, http.MethodGet, "")
+	if err != nil {
+		return err
+	}
+
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	j := map[string]interface{}{}
+	json.Unmarshal(body, &j)
+
+	if data, ok := j["data"].(map[string]interface{}); ok {
+		token, ok := data["token"].(string)
+		if ok {
+			lastToken = token
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unable to decode token response %v", j)
+}
+
+func iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane(arg1 *godog.DocString) error {
+	return godog.ErrPending
 }

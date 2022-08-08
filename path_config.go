@@ -140,9 +140,6 @@ func (b *kumaBackend) pathConfigWrite(ctx context.Context, req *logical.Request,
 		return nil, err
 	}
 
-	// reset the client so the next invocation will pick up the new configuration
-	b.reset()
-
 	return nil, nil
 }
 

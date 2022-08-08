@@ -39,29 +39,30 @@ func (b *kumaBackend) tokenRevoke(ctx context.Context, req *logical.Request, d *
 		return nil, fmt.Errorf("error getting Kuma client")
 	}
 
-	var account string
-	// We passed the account using InternalData from when we first created
-	// the secret. This is because the Harbor API uses the exact robot account name
-	// for revocation.
-	accountRaw, ok := req.Secret.InternalData["kuma_token_name"]
+	var token string
+	// We passed the jti using InternalData from when we first created
+	// the secret.
+	jti, ok := req.Secret.InternalData["token_id"]
 	if !ok {
-		return nil, fmt.Errorf("kuma_token_name is missing on the lease")
+		return nil, fmt.Errorf("token_id is missing on the lease")
 	}
 
-	account, ok = accountRaw.(string)
+	token, ok = jti.(string)
 	if !ok {
-		return nil, fmt.Errorf("unable convert kuma_token_name")
+		return nil, fmt.Errorf("unable convert token_id")
 	}
 
-	if err := deleteRobotAccount(ctx, client, account); err != nil {
+	b.Logger().Warn("Token revocation is not yet implemented", "jti", jti)
+	if err := revokeToken(ctx, client, token); err != nil {
 		return nil, fmt.Errorf("error revoking kuma token: %w", err)
 	}
 
 	return nil, nil
 }
 
-// deleteToken calls the Harbor client to delete the robot account
-func deleteRobotAccount(ctx context.Context, c *kumaClient, robotAccountName string) error {
+// revokeToken checks to see if a token has expired, if not it adds it to Kuma's revocation list
+// if the token is expired this operation is a noop
+func revokeToken(ctx context.Context, c *kumaClient, jti string) error {
 	//err := c.RESTClient.DeleteRobotAccountByName(ctx, robotAccountName)
 
 	//if err != nil {
