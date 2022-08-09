@@ -51,7 +51,11 @@ enable:
     max_ttl="24h"
 
 generate:
-	vault read kuma/creds/kuma-role
+	vault read kuma/creds/kuma-role -format=json | jq -r .data.token > $(HOME)/.shipyard/data/kuma_dp/dataplane.token
+	@echo "Token written to $(HOME)/.shipyard/data/kuma_dp/dataplane.token"
+
+run_dp:
+	docker exec -it kuma-dp.container.shipyard.run kuma-dp run --cp-address https://kuma-cp.container.shipyard.run:5678 --dataplane-file /files/dataplane.json --dataplane-token "$(shell cat $(HOME)/.shipyard/data/kuma_dp/dataplane.token)" --ca-cert-file /files/ca.cert
 
 clean:
 	rm -f ./vault/plugins/*
