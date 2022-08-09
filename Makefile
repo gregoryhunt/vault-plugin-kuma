@@ -32,6 +32,7 @@ start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
 start_shipyard_env:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 	shipyard run ./shipyard
 	@echo 'Ensure you set the environment variables using eval $(shipyard env) before running any further commands'
 
@@ -49,25 +50,34 @@ enable:
 
 	# How to differentiate between user token role and dataplane role
 	vault write kuma/roles/kuma-role \
-		dataplane_name="backend-1" \
+		token_name="backend-1" \
     mesh=default \
 		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
     ttl="5m" \
     max_ttl="24h"
 
 	vault write kuma/roles/kuma-role-globbed \
-		dataplane_name="backend-*" \
+		token_name="backend-*" \
     mesh=default \
 		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
     ttl="5m" \
     max_ttl="24h"
 
+	vault write kuma/roles/kuma-role-user \
+		token_name="nic" \
+    mesh=default \
+		groups="mesh-system:admin" \
+    ttl="5m" \
+    max_ttl="24h"
+
 test_token_generation:
-	vault read kuma/creds/kuma-role dataplane_name=backend-1 || true
+	vault read kuma/creds/kuma-role token_name=backend-1 || true
 	@echo ""
 	vault read kuma/creds/kuma-role-globbed || true
 	@echo ""
-	vault read kuma/creds/kuma-role-globbed dataplane_name=backend-1 || true
+	vault read kuma/creds/kuma-role-globbed token_name=backend-1 || true
+	@echo ""
+	vault read kuma/creds/kuma-role-user token_name=nic || true
 
 generate:
 	vault read kuma/creds/kuma-role -format=json | jq -r .data.token > $(HOME)/.shipyard/data/kuma_dp/dataplane.token

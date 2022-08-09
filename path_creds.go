@@ -32,9 +32,9 @@ func pathCreds(b *kumaBackend) *framework.Path {
 				Description: "Name of the role",
 				Required:    true,
 			},
-			"dataplane_name": {
+			"token_name": {
 				Type:        framework.TypeLowerCaseString,
-				Description: "Name of the dataplane, can contain globbed matches i.e backend-*",
+				Description: "Name of the token, must match role value. If ommitted, value from role is used",
 				Required:    false,
 			},
 		},
@@ -72,23 +72,26 @@ func (b *kumaBackend) createCreds(
 	roleName string,
 	role *kumaRoleEntry) (*logical.Response, error) {
 
-	name := req.GetString("dataplane_name")
+	name := req.GetString("token_name")
 
 	if name == "" {
 		// if name is not specified check to see if the role does not have a globbed pattern and use that, else return an error
 		re := `[\{\}\!\[\]\*\?]`
 		r := regexp.MustCompile(re)
 
-		if r.MatchString(role.DataplaneName) {
-			return logical.ErrorResponse("unable to generate token, error: when dataplane_name in the role %s contains a globbed pattern %s, you must specify the 'dataplane_name' with the name for your dataplane instance", name, role.DataplaneName), nil
+		if r.MatchString(role.TokenName) {
+			return logical.ErrorResponse(
+				"unable to generate token, error: when token_name in the role %s contains a globbed pattern %s, you must pass the 'token_name' parameter with an absolute value when creating credentials",
+				name,
+				role.TokenName), nil
 		}
 
-		name = role.DataplaneName
+		name = role.TokenName
 	} else {
 		// if name is specified check that it matches the role, role allows globbed patterns
-		g := glob.MustCompile(role.DataplaneName)
+		g := glob.MustCompile(role.TokenName)
 		if !g.Match(name) {
-			return logical.ErrorResponse("unable to generate token, error: dataplane_name %s must match the globbed pattern in the role %s", name, role.DataplaneName), nil
+			return logical.ErrorResponse("unable to generate token, error: token_name %s must match the globbed pattern in the role %s", name, role.TokenName), nil
 		}
 	}
 
@@ -105,19 +108,30 @@ func (b *kumaBackend) createCreds(
 	}
 
 	token := ""
+
+	// if tags generate a dataplane token
 	if len(role.Tags) > 0 {
 		b.Logger().Info("Generate dataplane token", "tags", role.Tags)
 		t, err := client.dpTokenClient.Generate(name, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
 
 		if err != nil {
-			return logical.ErrorResponse("unable to generate token, error:", err), nil
+			return logical.ErrorResponse("unable to generate dataplane token, error:", err), nil
 		}
 
 		token = t
 	}
 
-	// if role.Groups
-	//b.client.clientTokenClient.Generate
+	// if groups generate a user token
+	if len(role.Groups) > 0 {
+		b.Logger().Info("Generate user token", "tags", role.Tags)
+		t, err := client.userTokenClient.Generate(name, role.Groups, role.MaxTTL)
+
+		if err != nil {
+			return logical.ErrorResponse("unable to generate user token, error:", err), nil
+		}
+
+		token = t
+	}
 
 	// parse the token to get the jti, we need this to revoke tokens
 	parts := strings.Split(token, ".")

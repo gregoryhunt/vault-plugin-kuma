@@ -25,24 +25,32 @@ You can configure a role to manage a user or service token by setting the permis
 // for a Vault role to access and call the Harbor
 // token endpoints
 type kumaRoleEntry struct {
-	DataplaneName string        `json:"dataplane_name"`
-	Mesh          string        `json:"mesh"`
-	Tags          tagsMap       `json:"tags"`
-	Group         []string      `json:"groups"`
-	TTL           time.Duration `json:"ttl"`
-	MaxTTL        time.Duration `json:"max_ttl"`
+	TokenName string        `json:"token_name"`
+	Mesh      string        `json:"mesh"`
+	Tags      tagsMap       `json:"tags"`
+	Groups    groupsList    `json:"groups"`
+	TTL       time.Duration `json:"ttl"`
+	MaxTTL    time.Duration `json:"max_ttl"`
 }
 
 // toResponseData returns response data for a role
 func (r *kumaRoleEntry) toResponseData() map[string]interface{} {
-	t := r.Tags.ToString()
+	tags := r.Tags.ToString()
+	groups := r.Groups.ToString()
 
 	respData := map[string]interface{}{
-		"dataplane_name": r.DataplaneName,
-		"mesh":           r.Mesh,
-		"tags":           t,
-		"ttl":            r.TTL.String(),
-		"max_ttl":        r.MaxTTL.String(),
+		"token_name": r.TokenName,
+		"mesh":       r.Mesh,
+		"ttl":        r.TTL.String(),
+		"max_ttl":    r.MaxTTL.String(),
+	}
+
+	if tags != "" {
+		respData["tags"] = tags
+	}
+
+	if groups != "" {
+		respData["groups"] = groups
 	}
 
 	return respData
@@ -60,32 +68,35 @@ func pathRoles(b *kumaBackend) []*framework.Path {
 					Description: "Name of the role",
 					Required:    true,
 				},
-				"dataplane_name": {
+				"token_name": {
 					Type:        framework.TypeLowerCaseString,
-					Description: "Name of the dataplane, can contain globbed matches i.e backend-*",
+					Description: "Name encoded the token Name field, can contain globbed matches i.e backend-*",
 					Required:    true,
 				},
 				"mesh": {
 					Type:        framework.TypeString,
-					Description: "The Mesh to provision token in",
+					Description: "The Mesh to provision token in, if not suplied 'default' is used",
+					Required:    false,
 				},
 				"tags": {
 					Type:        framework.TypeString,
-					Description: "The tags for the dataplane token, specified as comma separated key value pairs",
-					Required:    true,
+					Description: "The tags for the dataplane token, specified as comma separated key value pairs. Either 'tags' or 'groups' must be specified",
+					Required:    false,
 				},
-				"group": {
+				"groups": {
 					Type:        framework.TypeString,
-					Description: "The groups for the user token",
+					Description: "The groups for the user token, specified as a comma separated list of values. Either 'tags' or 'groups' must be specified",
 					Required:    false,
 				},
 				"ttl": {
 					Type:        framework.TypeDurationSecond,
 					Description: "Default lease for generated credentials. If not set or set to 0, will use system default.",
+					Required:    false,
 				},
 				"max_ttl": {
 					Type:        framework.TypeDurationSecond,
 					Description: "Maximum time for role. If not set or set to 0, will use system default.",
+					Required:    false,
 				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
@@ -162,15 +173,14 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 
 	createOperation := (req.Operation == logical.CreateOperation)
 
-	if name, ok := d.GetOk("dataplane_name"); ok {
-		roleEntry.DataplaneName = name.(string)
+	if name, ok := d.GetOk("token_name"); ok {
+		roleEntry.TokenName = name.(string)
 
 		// check if the name contains a globbed pattern that it compiles
-		_, err := glob.Compile(roleEntry.DataplaneName)
+		_, err := glob.Compile(roleEntry.TokenName)
 		if err != nil {
-			return logical.ErrorResponse("dataplane_name %s contains an invalid pattern: %s", roleEntry.DataplaneName, err), logical.ErrInvalidRequest
+			return logical.ErrorResponse("token_name %s contains an invalid pattern: %s", roleEntry.TokenName, err), logical.ErrInvalidRequest
 		}
-
 	} else {
 		return logical.ErrorResponse("missing dataplane_name in role"), logical.ErrInvalidRequest
 	}
@@ -188,8 +198,21 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 		}
 
 		roleEntry.Tags = parsedTags
-	} else {
-		return logical.ErrorResponse("missing permissions in role"), logical.ErrInvalidRequest
+	}
+
+	if t, ok := d.GetOk("groups"); ok {
+		parsedGroups := groupsString(t.(string)).ToList()
+
+		roleEntry.Groups = parsedGroups
+	}
+
+	// either tags or groups must be set
+	if len(roleEntry.Tags) == 0 && len(roleEntry.Groups) == 0 {
+		return logical.ErrorResponse("you must specify either tags or groups in the role config"), logical.ErrInvalidRequest
+	}
+
+	if len(roleEntry.Tags) > 0 && len(roleEntry.Groups) > 0 {
+		return logical.ErrorResponse("you have specified both tags and groups in the role config, only tags or groups is acceptable, not both"), logical.ErrInvalidRequest
 	}
 
 	if ttlRaw, ok := d.GetOk("ttl"); ok {

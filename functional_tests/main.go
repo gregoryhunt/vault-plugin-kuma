@@ -151,9 +151,9 @@ func initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I create the Vault role "([^"]*)" with the following data$`, iCreateTheVaultRoleWithTheFollowingData)
 	ctx.Step(`^I expect the role "([^"]*)" to exist with the following data$`, iExpectTheRoleToExistWithTheFollowingData)
 
-	ctx.Step(`^I create a dataplane token for the role "([^"]*)"$`, iCreateADataplaneToken)
-	ctx.Step(`^I create a dataplane token for the role "([^"]*)" with the k/v "([^"]*)"$`, iCreateADataplaneTokenWithParams)
-	ctx.Step(`^I should be able to use this token to register the following dataplane$`, iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane)
+	ctx.Step(`^I create a token for the role "([^"]*)"$`, iCreateADataplaneToken)
+	ctx.Step(`^I create a token for the role "([^"]*)" with the k/v "([^"]*)"$`, iCreateADataplaneTokenWithParams)
+	ctx.Step(`^I should be able to use this token to register the dataplane "([^"]*)" with the following$`, iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane)
 	ctx.Step(`^I should be able to start a dataplane using the token$`, iShouldBeAbleToStartADataplaneUsingTheToken)
 	ctx.Step(`^a dataplane should be registered called "([^"]*)"$`, aDataplaneShouldBeRegisteredCalled)
 }
@@ -295,8 +295,25 @@ func iCreateADataplaneToken(arg1 string) error {
 	return iCreateADataplaneTokenWithParams(arg1, "")
 }
 
-func iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane(arg1 *godog.DocString) error {
-	return godog.ErrPending
+func iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane(arg1 string, arg2 *godog.DocString) error {
+	req, err := http.NewRequest(http.MethodPut, "http://localhost:5681/meshes/default/dataplanes/"+arg1, bytes.NewReader([]byte(arg2.Content)))
+	if err != nil {
+		return fmt.Errorf("error trying to create request: %s", err)
+	}
+
+	req.Header["authorization"] = []string{"Bearer " + lastToken}
+	req.Header["content-type"] = []string{"application/json"}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error trying to create dataplanes: %s", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("expected status 201 from server, got %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func iShouldBeAbleToStartADataplaneUsingTheToken() error {
