@@ -60,7 +60,7 @@ func initializeSuite(ctx *godog.TestSuiteContext) {
 
 		if *createEnvironment {
 
-			cmd := exec.Command("/usr/local/bin/shipyard", "run", "--no-browser", "./shipyard")
+			cmd := exec.Command("shipyard", "run", "--no-browser", "./shipyard")
 			cmd.Dir = "../"
 			cmd.Stderr = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Error})
 			cmd.Stdout = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Debug})

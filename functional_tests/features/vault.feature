@@ -25,12 +25,25 @@ Feature: Kuma User Tokens
 
   @kuma_dataplane_token
   Scenario: Create dataplane tokens
-    Given I create the Vault role "kuma-role" with the following data
+    Given I create the Vault role "kuma-dataplane-role" with the following data
       ```
       {
         "mesh": "default",
         "ttl": "1h",
         "tags": "kuma.io/service=backend,kuma.io/service=backend-admin",
+        "max_ttl": "24h"
+      }
+      ```
+    Then I create a dataplane token for the role "kuma-dataplane-role"
+
+  @kuma_user_token
+  Scenario: Create user tokens
+    Given I create the Vault role "kuma-user-role" with the following data
+      ```
+      {
+        "mesh": "default",
+        "ttl": "1h",
+        "groups": "mesh-system:admin"
         "max_ttl": "24h"
       }
       ```
@@ -48,7 +61,7 @@ Feature: Kuma User Tokens
               "port": 11011,
               "servicePort": 11012,
               "tags": {
-                "service": "backend",
+                "kuma.io/service": "backend",
                 "version": "2.0",
                 "env": "production"
               }

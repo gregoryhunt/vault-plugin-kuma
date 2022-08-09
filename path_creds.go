@@ -92,7 +92,7 @@ func (b *kumaBackend) createCreds(
 		t, err := client.dpTokenClient.Generate(displayName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
 
 		if err != nil {
-			return logical.ErrorResponse("unable to generate token", "error", err), nil
+			return logical.ErrorResponse("unable to generate token, error:", err), nil
 		}
 
 		token = t
