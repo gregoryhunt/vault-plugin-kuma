@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
@@ -23,6 +24,7 @@ var opts = &godog.Options{
 
 var logStore bytes.Buffer
 var logger hclog.Logger
+var startedCommands []*exec.Cmd
 
 var environment map[string]string
 
@@ -95,7 +97,20 @@ func initializeSuite(ctx *godog.TestSuiteContext) {
 		configurePlugin()
 	})
 
+	ctx.ScenarioContext().Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+		startedCommands = []*exec.Cmd{}
+
+		return ctx, nil
+	})
+
 	ctx.ScenarioContext().After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+		// stop any running commands
+		for _, c := range startedCommands {
+			if c.ProcessState != nil && !c.ProcessState.Exited() {
+				c.Process.Kill()
+			}
+		}
+
 		if err != nil {
 			outputLog()
 		}
@@ -132,6 +147,8 @@ func initializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Step(`^I create a dataplane token for the role "([^"]*)"$`, iCreateADataplaneToken)
 	ctx.Step(`^I should be able to use this token to register the following dataplane$`, iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane)
+	ctx.Step(`^I should be able to start a dataplane using the token$`, iShouldBeAbleToStartADataplaneUsingTheToken)
+	ctx.Step(`^a dataplane should be registered called "([^"]*)"$`, aDataplaneShouldBeRegisteredCalled)
 }
 
 func doVaultRequest(url, method, body string) (*http.Response, error) {
@@ -187,7 +204,7 @@ func iExpectTheRoleToExistWithTheFollowingData(arg1 string, arg2 *godog.DocStrin
 
 	for k, v := range data {
 		if v != testData[k] {
-			return fmt.Errorf("Expected data for %s value %v, got %v", k, v, testData[k])
+			return fmt.Errorf("Expected data for: %s value %v, got %v", k, v, testData[k])
 		}
 	}
 
@@ -264,4 +281,61 @@ func iCreateADataplaneToken(arg1 string) error {
 
 func iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane(arg1 *godog.DocString) error {
 	return godog.ErrPending
+}
+
+func iShouldBeAbleToStartADataplaneUsingTheToken() error {
+
+	errChan := make(chan error, 1)
+
+	var cmd *exec.Cmd
+
+	go func() {
+		cmd = exec.Command(
+			"docker", "exec", "kuma-dp.container.shipyard.run",
+			"kuma-dp",
+			"run",
+			"--cp-address", "https://kuma-cp.container.shipyard.run:5678",
+			"--dataplane-file", "/files/dataplane.json",
+			"--dataplane-token", lastToken,
+			"--ca-cert-file", "/files/ca.cert",
+		)
+
+		cmd.Stderr = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Error})
+		cmd.Stdout = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Debug})
+
+		// add to the started commands collection so we can kill at the end of the feature
+		startedCommands = append(startedCommands, cmd)
+
+		err := cmd.Run()
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		errChan <- fmt.Errorf("process stopped running")
+	}()
+
+	// if the process stays running for 5 seconds assume success
+	timeout := time.After(5 * time.Second)
+
+	select {
+	case e := <-errChan:
+		return e
+	case <-timeout:
+		return nil
+	}
+}
+
+func aDataplaneShouldBeRegisteredCalled(arg1 string) error {
+	resp, err := http.DefaultClient.Get("http://localhost:5681/meshes/default/dataplanes/" + arg1)
+	if err != nil {
+		return fmt.Errorf("error trying to query dataplanes: %s", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status 200 from server, got %d", resp.StatusCode)
+	}
+
+	return nil
+
 }

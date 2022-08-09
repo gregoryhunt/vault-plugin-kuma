@@ -24,10 +24,12 @@ You can configure a role to manage a user or service token by setting the permis
 // for a Vault role to access and call the Harbor
 // token endpoints
 type kumaRoleEntry struct {
-	Mesh   string        `json:"mesh"`
-	Tags   tagsMap       `json:"tags"`
-	TTL    time.Duration `json:"ttl"`
-	MaxTTL time.Duration `json:"max_ttl"`
+	DataplaneName string        `json:"dataplane_name"`
+	Mesh          string        `json:"mesh"`
+	Tags          tagsMap       `json:"tags"`
+	Group         []string      `json:"groups"`
+	TTL           time.Duration `json:"ttl"`
+	MaxTTL        time.Duration `json:"max_ttl"`
 }
 
 // toResponseData returns response data for a role
@@ -35,11 +37,13 @@ func (r *kumaRoleEntry) toResponseData() map[string]interface{} {
 	t := r.Tags.ToString()
 
 	respData := map[string]interface{}{
-		"mesh":    r.Mesh,
-		"tags":    t,
-		"ttl":     r.TTL.String(),
-		"max_ttl": r.MaxTTL.String(),
+		"dataplane_name": r.DataplaneName,
+		"mesh":           r.Mesh,
+		"tags":           t,
+		"ttl":            r.TTL.String(),
+		"max_ttl":        r.MaxTTL.String(),
 	}
+
 	return respData
 }
 
@@ -55,14 +59,24 @@ func pathRoles(b *kumaBackend) []*framework.Path {
 					Description: "Name of the role",
 					Required:    true,
 				},
+				"dataplane_name": {
+					Type:        framework.TypeLowerCaseString,
+					Description: "Name of the dataplane",
+					Required:    true,
+				},
 				"mesh": {
 					Type:        framework.TypeString,
 					Description: "The Mesh to provision token in",
 				},
 				"tags": {
 					Type:        framework.TypeString,
-					Description: "The tags for the Kuma token",
+					Description: "The tags for the dataplane token, specified as comma separated key value pairs",
 					Required:    true,
+				},
+				"group": {
+					Type:        framework.TypeString,
+					Description: "The groups for the user token",
+					Required:    false,
 				},
 				"ttl": {
 					Type:        framework.TypeDurationSecond,
@@ -146,6 +160,12 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 	}
 
 	createOperation := (req.Operation == logical.CreateOperation)
+
+	if name, ok := d.GetOk("dataplane_name"); ok {
+		roleEntry.DataplaneName = name.(string)
+	} else {
+		return logical.ErrorResponse("missing dataplane_name in role"), logical.ErrInvalidRequest
+	}
 
 	if mesh, ok := d.GetOk("mesh"); ok {
 		roleEntry.Mesh = mesh.(string)

@@ -31,6 +31,10 @@ build:
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
+start_shipyard_env:
+	shipyard run ./shipyard
+	@echo 'Ensure you set the environment variables using eval $(shipyard env) before running any further commands'
+
 restart_vault_shipyard:
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 	shipyard taint container.vault && shipyard run --no-browser ./shipyard
@@ -45,6 +49,7 @@ enable:
 
 	# How to differentiate between user token role and dataplane role
 	vault write kuma/roles/kuma-role \
+		dataplane_name="backend-1" \
     mesh=default \
 		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
     ttl="5m" \

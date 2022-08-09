@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/hashicorp/vault/sdk/framework"
@@ -66,15 +65,7 @@ func (b *kumaBackend) createCreds(
 	roleName string,
 	role *kumaRoleEntry) (*logical.Response, error) {
 
-	var displayName string
-
-	b.Logger().Info("Create new token", "name", req.DisplayName, "operation", req.Operation)
-
-	if req.DisplayName != "" {
-		re := regexp.MustCompile("[^[:alnum:]._-]")
-		dn := re.ReplaceAllString(req.DisplayName, "-")
-		displayName = fmt.Sprintf("%s.", dn)
-	}
+	b.Logger().Info("Create new token for dataplane", "name", role.DataplaneName, "operation", req.Operation)
 
 	// fetch a client instance, client is a property of backend but there is not guarantee that
 	// it has been instantiated
@@ -89,7 +80,7 @@ func (b *kumaBackend) createCreds(
 	token := ""
 	if len(role.Tags) > 0 {
 		b.Logger().Info("Generate dataplane token", "tags", role.Tags)
-		t, err := client.dpTokenClient.Generate(displayName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
+		t, err := client.dpTokenClient.Generate(role.DataplaneName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
 
 		if err != nil {
 			return logical.ErrorResponse("unable to generate token, error:", err), nil
