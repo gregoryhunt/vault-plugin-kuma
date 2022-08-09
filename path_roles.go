@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gobwas/glob"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
@@ -61,7 +62,7 @@ func pathRoles(b *kumaBackend) []*framework.Path {
 				},
 				"dataplane_name": {
 					Type:        framework.TypeLowerCaseString,
-					Description: "Name of the dataplane",
+					Description: "Name of the dataplane, can contain globbed matches i.e backend-*",
 					Required:    true,
 				},
 				"mesh": {
@@ -163,6 +164,13 @@ func (b *kumaBackend) pathRolesWrite(ctx context.Context, req *logical.Request, 
 
 	if name, ok := d.GetOk("dataplane_name"); ok {
 		roleEntry.DataplaneName = name.(string)
+
+		// check if the name contains a globbed pattern that it compiles
+		_, err := glob.Compile(roleEntry.DataplaneName)
+		if err != nil {
+			return logical.ErrorResponse("dataplane_name %s contains an invalid pattern: %s", roleEntry.DataplaneName, err), logical.ErrInvalidRequest
+		}
+
 	} else {
 		return logical.ErrorResponse("missing dataplane_name in role"), logical.ErrInvalidRequest
 	}

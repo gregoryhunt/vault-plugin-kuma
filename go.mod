@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/cucumber/godog v0.12.5
+	github.com/gobwas/glob v0.2.3
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/hashicorp/vault/api v1.7.2
 	github.com/hashicorp/vault/sdk v0.5.1

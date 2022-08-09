@@ -41,6 +41,21 @@ Feature: Kuma User Tokens
     Then I should be able to start a dataplane using the token
     And a dataplane should be registered called "backend-1"
 
+  @kuma_dataplane_token_globbed
+  Scenario: Create dataplane tokens using globbed patterns
+    Given I create the Vault role "kuma-dataplane-role-globbed" with the following data
+      ```
+      {
+        "dataplane_name": "backend-*",
+        "mesh": "default",
+        "ttl": "1h",
+        "tags": "kuma.io/service=backend,kuma.io/service=backend-admin",
+        "max_ttl": "24h"
+      }
+      ```
+    And I create a dataplane token for the role "kuma-dataplane-role-globbed" with the k/v "dataplane_name=backend-1"
+    Then I should be able to start a dataplane using the token
+    And a dataplane should be registered called "backend-1"
 
 
   #@kuma_user_token

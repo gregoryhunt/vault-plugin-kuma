@@ -43,7 +43,7 @@ enable:
 	vault secrets enable -path=kuma vault-plugin-kuma || true
 
 	vault write kuma/config \
-		allowed_roles="kuma-role" \
+		allowed_roles="kuma-role,kuma-role-globbed" \
 		url="http://kuma-cp.container.shipyard.run:5681" \
 		token="$(KUMA_TOKEN)"
 
@@ -54,6 +54,20 @@ enable:
 		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
     ttl="5m" \
     max_ttl="24h"
+
+	vault write kuma/roles/kuma-role-globbed \
+		dataplane_name="backend-*" \
+    mesh=default \
+		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
+    ttl="5m" \
+    max_ttl="24h"
+
+test_token_generation:
+	vault read kuma/creds/kuma-role dataplane_name=backend-1 || true
+	@echo ""
+	vault read kuma/creds/kuma-role-globbed || true
+	@echo ""
+	vault read kuma/creds/kuma-role-globbed dataplane_name=backend-1 || true
 
 generate:
 	vault read kuma/creds/kuma-role -format=json | jq -r .data.token > $(HOME)/.shipyard/data/kuma_dp/dataplane.token

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/gobwas/glob"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
@@ -29,6 +31,11 @@ func pathCreds(b *kumaBackend) *framework.Path {
 				Type:        framework.TypeLowerCaseString,
 				Description: "Name of the role",
 				Required:    true,
+			},
+			"dataplane_name": {
+				Type:        framework.TypeLowerCaseString,
+				Description: "Name of the dataplane, can contain globbed matches i.e backend-*",
+				Required:    false,
 			},
 		},
 		Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -65,7 +72,27 @@ func (b *kumaBackend) createCreds(
 	roleName string,
 	role *kumaRoleEntry) (*logical.Response, error) {
 
-	b.Logger().Info("Create new token for dataplane", "name", role.DataplaneName, "operation", req.Operation)
+	name := req.GetString("dataplane_name")
+
+	if name == "" {
+		// if name is not specified check to see if the role does not have a globbed pattern and use that, else return an error
+		re := `[\{\}\!\[\]\*\?]`
+		r := regexp.MustCompile(re)
+
+		if r.MatchString(role.DataplaneName) {
+			return logical.ErrorResponse("unable to generate token, error: when dataplane_name in the role %s contains a globbed pattern %s, you must specify the 'dataplane_name' with the name for your dataplane instance", name, role.DataplaneName), nil
+		}
+
+		name = role.DataplaneName
+	} else {
+		// if name is specified check that it matches the role, role allows globbed patterns
+		g := glob.MustCompile(role.DataplaneName)
+		if !g.Match(name) {
+			return logical.ErrorResponse("unable to generate token, error: dataplane_name %s must match the globbed pattern in the role %s", name, role.DataplaneName), nil
+		}
+	}
+
+	b.Logger().Info("Create new token for dataplane", "name", name, "operation", req.Operation)
 
 	// fetch a client instance, client is a property of backend but there is not guarantee that
 	// it has been instantiated
@@ -80,7 +107,7 @@ func (b *kumaBackend) createCreds(
 	token := ""
 	if len(role.Tags) > 0 {
 		b.Logger().Info("Generate dataplane token", "tags", role.Tags)
-		t, err := client.dpTokenClient.Generate(role.DataplaneName, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
+		t, err := client.dpTokenClient.Generate(name, role.Mesh, role.Tags, ProxyTypeDataplane, role.MaxTTL)
 
 		if err != nil {
 			return logical.ErrorResponse("unable to generate token, error:", err), nil

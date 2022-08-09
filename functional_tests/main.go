@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"github.com/cucumber/godog"
@@ -24,7 +25,6 @@ var opts = &godog.Options{
 
 var logStore bytes.Buffer
 var logger hclog.Logger
-var startedCommands []*exec.Cmd
 
 var environment map[string]string
 
@@ -97,22 +97,28 @@ func initializeSuite(ctx *godog.TestSuiteContext) {
 		configurePlugin()
 	})
 
-	ctx.ScenarioContext().Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
-		startedCommands = []*exec.Cmd{}
-
-		return ctx, nil
-	})
-
 	ctx.ScenarioContext().After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
-		// stop any running commands
-		for _, c := range startedCommands {
-			if c.ProcessState != nil && !c.ProcessState.Exited() {
-				c.Process.Kill()
-			}
-		}
+		// reset the dataplane
+		cmd := exec.Command("shipyard", "taint", "container.kuma_dp")
+		cmd.Dir = "../"
+		cmd.Stderr = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Error})
+		cmd.Stdout = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Debug})
 
+		cmdErr := cmd.Run()
 		if err != nil {
 			outputLog()
+			return nil, cmdErr
+		}
+
+		cmd = exec.Command("shipyard", "run", "./shipyard")
+		cmd.Dir = "../"
+		cmd.Stderr = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Error})
+		cmd.Stdout = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Debug})
+
+		cmdErr = cmd.Run()
+		if err != nil {
+			outputLog()
+			return nil, cmdErr
 		}
 
 		return ctx, nil
@@ -146,6 +152,7 @@ func initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I expect the role "([^"]*)" to exist with the following data$`, iExpectTheRoleToExistWithTheFollowingData)
 
 	ctx.Step(`^I create a dataplane token for the role "([^"]*)"$`, iCreateADataplaneToken)
+	ctx.Step(`^I create a dataplane token for the role "([^"]*)" with the k/v "([^"]*)"$`, iCreateADataplaneTokenWithParams)
 	ctx.Step(`^I should be able to use this token to register the following dataplane$`, iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane)
 	ctx.Step(`^I should be able to start a dataplane using the token$`, iShouldBeAbleToStartADataplaneUsingTheToken)
 	ctx.Step(`^a dataplane should be registered called "([^"]*)"$`, aDataplaneShouldBeRegisteredCalled)
@@ -257,8 +264,13 @@ func configurePlugin() error {
 
 var lastToken = ""
 
-func iCreateADataplaneToken(arg1 string) error {
-	resp, err := doVaultRequest("kuma/creds/"+arg1, http.MethodGet, "")
+func iCreateADataplaneTokenWithParams(arg1, arg2 string) error {
+	query := ""
+	if arg2 != "" {
+		query = "?" + arg2
+	}
+
+	resp, err := doVaultRequest("kuma/creds/"+arg1+query, http.MethodGet, "")
 	if err != nil {
 		return err
 	}
@@ -279,6 +291,10 @@ func iCreateADataplaneToken(arg1 string) error {
 	return fmt.Errorf("unable to decode token response %v", j)
 }
 
+func iCreateADataplaneToken(arg1 string) error {
+	return iCreateADataplaneTokenWithParams(arg1, "")
+}
+
 func iShouldBeAbleToUseThisTokenToRegisterTheFollowingDataplane(arg1 *godog.DocString) error {
 	return godog.ErrPending
 }
@@ -290,6 +306,8 @@ func iShouldBeAbleToStartADataplaneUsingTheToken() error {
 	var cmd *exec.Cmd
 
 	go func() {
+		// this command runs in the Kuma dataplane container, this container is restarted after every scenario
+
 		cmd = exec.Command(
 			"docker", "exec", "kuma-dp.container.shipyard.run",
 			"kuma-dp",
@@ -300,11 +318,10 @@ func iShouldBeAbleToStartADataplaneUsingTheToken() error {
 			"--ca-cert-file", "/files/ca.cert",
 		)
 
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 		cmd.Stderr = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Error})
 		cmd.Stdout = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Debug})
-
-		// add to the started commands collection so we can kill at the end of the feature
-		startedCommands = append(startedCommands, cmd)
 
 		err := cmd.Run()
 		if err != nil {
