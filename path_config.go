@@ -58,6 +58,15 @@ func pathConfig(b *kumaBackend) *framework.Path {
 					Sensitive: false,
 				},
 			},
+			"ca_cert": {
+				Type:        framework.TypeString,
+				Description: "The CA certificate used to verify the Kuma API TLS certificate",
+				Required:    false,
+				DisplayAttrs: &framework.DisplayAttributes{
+					Name:      "CA Cert",
+					Sensitive: false,
+				},
+			},
 		},
 		Operations: map[logical.Operation]framework.OperationHandler{
 			logical.ReadOperation: &framework.PathOperation{
