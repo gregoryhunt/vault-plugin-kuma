@@ -67,7 +67,7 @@ enable:
 		token_name="nic" \
     mesh=default \
 		groups="mesh-system:admin" \
-    ttl="5m" \
+    ttl="1m" \
     max_ttl="24h"
 
 test_token_generation:
