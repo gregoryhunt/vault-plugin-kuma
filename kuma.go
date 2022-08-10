@@ -72,7 +72,7 @@ func revokeToken(ctx context.Context, c *kumaClient, jti string) error {
 	return nil
 }
 
-// robotAccountRenew
+// tokenRenew
 func (b *kumaBackend) tokenRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	roleRaw, ok := req.Secret.InternalData["role"]
 	if !ok {
