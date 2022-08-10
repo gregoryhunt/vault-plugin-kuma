@@ -1,19 +1,33 @@
 package main
 
 import (
-	"log"
 	"os"
 
 	kuma "github.com/gregoryhunt/vault-plugin-kuma"
-	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/vault/api"
+	"github.com/hashicorp/vault/sdk/plugin"
 )
 
 func main() {
-	dbType, err := kuma.New()
-	if err != nil {
-		log.Println(err)
+	logger := hclog.New(&hclog.LoggerOptions{})
+
+	apiClientMeta := &api.PluginAPIClientMeta{}
+	flags := apiClientMeta.FlagSet()
+	if err := flags.Parse(os.Args[1:]); err != nil {
+		logger.Error("could not parse flags", "error", err)
 		os.Exit(1)
 	}
 
-	dbplugin.Serve(dbType.(dbplugin.Database))
+	tlsConfig := apiClientMeta.GetTLSConfig()
+	tlsProviderFunc := api.VaultPluginTLSProvider(tlsConfig)
+
+	if err := plugin.Serve(&plugin.ServeOpts{
+		BackendFactoryFunc: kuma.Factory,
+		TLSProviderFunc:    tlsProviderFunc,
+	}); err != nil {
+		logger.Error("plugin shutting down", "error", err)
+		os.Exit(1)
+	}
 }

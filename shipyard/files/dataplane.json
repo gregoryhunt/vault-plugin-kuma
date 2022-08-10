@@ -1,0 +1,31 @@
+{
+  "type": "Dataplane",
+  "name": "backend-1",
+  "mesh": "default",
+  "networking": {
+    "address": "127.0.0.1",
+    "inbound": [
+      {
+        "port": 11011,
+        "servicePort": 11012,
+        "tags": {
+          "kuma.io/service": "backend",
+          "version": "2.0",
+          "env": "production"
+        }
+      }
+    ],
+    "outbound": [
+      {
+        "port": 33033,
+
+        "service": "database"
+      },
+      {
+        "port": 44044,
+
+        "service": "user"
+      }
+    ]
+  }
+}

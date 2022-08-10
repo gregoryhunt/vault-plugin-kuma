@@ -2,131 +2,229 @@ package kuma
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
 
-	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
-	"github.com/hashicorp/vault/sdk/helper/strutil"
-	"github.com/hashicorp/vault/sdk/helper/template"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
-	defaultUserCreationCQL   = `CREATE USER '{{username}}' WITH PASSWORD '{{password}}' NOSUPERUSER;`
-	defaultUserDeletionCQL   = `DROP USER '{{username}}';`
-	defaultChangePasswordCQL = `ALTER USER '{{username}}' WITH PASSWORD '{{password}}';`
-	kumaTypeName             = "kuma"
-
-	defaultUserNameTemplate = `{{ printf "v_%s_%s_%s_%s" (.DisplayName | truncate 15) (.RoleName | truncate 15) (random 20) (unix_time) | truncate 100 | replace "-" "_" | lowercase }}`
+	kumaTokenAccountType                = "kuma_token"
+	kumaRevocationSecret                = "kuma_revocations"
+	kumaTokenUser                       = "token_user"
+	kumaTokenDataplane                  = "token_dataplane"
+	kumaGlobalSecretDataplaneRevocation = "dataplane-token-revocations-"
+	kumaGlobalSecretUserRevocation      = ""
 )
 
-// backend wraps the backend framework and adds a map for storing key value pairs
-type Kuma struct {
-	*kumaConnectionProducer
-
-	usernameProducer template.StringTemplate
-}
-
-// New returns a new Kuma instance
-func New() (interface{}, error) {
-	// Replace with httpClient for control plane access
-	db := new()
-	dbType := dbplugin.NewDatabaseErrorSanitizerMiddleware(db, db.secretValues)
-
-	return dbType, nil
-}
-
-func new() *Kuma {
-	connProducer := &kumaConnectionProducer{}
-	connProducer.Type = kumaTypeName
-
-	return &Kuma{
-		kumaConnectionProducer: connProducer,
+// kumaToken defines a secret to store for a given role
+// and how it should be revoked or renewed.
+func (b *kumaBackend) kumaToken() *framework.Secret {
+	return &framework.Secret{
+		Type: kumaTokenAccountType,
+		Fields: map[string]*framework.FieldSchema{
+			"kuma_token": {
+				Type:        framework.TypeString,
+				Description: "Kuma access token",
+			},
+		},
+		Revoke: b.tokenRevoke,
+		Renew:  b.tokenRenew,
 	}
 }
 
-// Initialize the kuma plugin. This is the equivalent of a constructor for the
-// database object itself.
-func (m *Kuma) Initialize(ctx context.Context, req dbplugin.InitializeRequest) (dbplugin.InitializeResponse, error) {
-	usernameTemplate, err := strutil.GetString(req.Config, "username_template")
+// tokenRevoke removes the token from the Vault storage API and calls the client to revoke the robot account
+func (b *kumaBackend) tokenRevoke(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+	client, err := b.getClient(ctx, req.Storage)
 	if err != nil {
-		return dbplugin.InitializeResponse{}, fmt.Errorf("failed to retrieve username_template: %w", err)
+		return nil, err
 	}
-	if usernameTemplate == "" {
-		usernameTemplate = defaultUserNameTemplate
+	if client == nil {
+		return nil, fmt.Errorf("error getting Kuma client")
 	}
 
-	up, err := template.NewTemplate(template.Template(usernameTemplate))
-	if err != nil {
-		return dbplugin.InitializeResponse{}, fmt.Errorf("unable to initialize username template: %w", err)
+	var tokenJTI string
+	// We passed the jti using InternalData from when we first created
+	// the secret.
+	jti, ok := req.Secret.InternalData["jti"]
+	if !ok {
+		return nil, fmt.Errorf("jti is missing on the lease")
 	}
-	m.usernameProducer = up
 
-	return m.kumaConnectionProducer.Initialize(ctx, req)
+	tokenJTI, ok = jti.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable convert jti")
+	}
+
+	var tokenMesh string
+	// We passed the mesh using InternalData from when we first created
+	// the secret.
+	mes, ok := req.Secret.InternalData["mesh"]
+	if !ok {
+		return nil, fmt.Errorf("mesh is missing on the lease")
+	}
+
+	tokenMesh, ok = mes.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable convert mesh")
+	}
+
+	var tokenType string
+	// We passed the jti using InternalData from when we first created
+	// the secret.
+	typ, ok := req.Secret.InternalData["type"]
+	if !ok {
+		return nil, fmt.Errorf("type is missing on the lease")
+	}
+
+	tokenType, ok = typ.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable convert type")
+	}
+
+	var tokenExpiry int64
+	// We passed the jti using InternalData from when we first created
+	// the secret.
+	exp, ok := req.Secret.InternalData["expiry"]
+	if !ok {
+		return nil, fmt.Errorf("expiry is missing on the lease")
+	}
+
+	// convert the expiry
+	switch exp.(type) {
+	case int:
+		tokenExpiry = int64(exp.(int))
+	case int64:
+		tokenExpiry = exp.(int64)
+	case float64:
+		tokenExpiry = int64(exp.(float64))
+	default:
+		return nil, fmt.Errorf("unable to convert expiry to int64 %s", reflect.TypeOf(exp))
+	}
+
+	// if the ttl on the token has not elapsed we need to add this token to
+	// the revocation list
+	b.Logger().Info("Revoking Token", "jti", tokenJTI, "type", tokenType, "mesh", tokenMesh, "expiry", time.Unix(0, tokenExpiry).String())
+
+	if time.Now().Sub(time.Unix(0, tokenExpiry)) < 0 {
+		b.Logger().Info("Token has not expired, revoke token in Kuma API", "jti", tokenJTI, "type", tokenType, "mesh", tokenMesh, "expiry", time.Unix(0, tokenExpiry).String())
+
+		if err := revokeToken(ctx, client, req.Storage, tokenType, tokenJTI, tokenMesh, tokenExpiry); err != nil {
+			return nil, fmt.Errorf("error revoking kuma token: %w", err)
+		}
+	}
+
+	return nil, nil
 }
 
-// Type returns the Name for the kuma backend implementation.
-// This is used for things like metrics and logging.  No behavior is switched on this.
-func (n *Kuma) Type() (string, error) {
-	return kumaTypeName, nil
+type RevocationList struct {
+	Tokens []RevocationToken `json:"tokens"`
 }
 
-// NewUser/Service creates a new user/service within the kuma dataplane. This user/service
-// is temporary in that it will exist until the TTL expires.
-func (m *Kuma) NewUser(ctx context.Context, req dbplugin.NewUserRequest) (dbplugin.NewUserResponse, error) {
-	m.Lock()
-	defer m.Unlock()
+type RevocationToken struct {
+	JTI    string `json:"jti"`
+	Mesh   string `json:"mesh"`
+	Expiry int64  `json:"expiry"`
+}
 
-	username, err := m.usernameProducer.Generate(req.UsernameConfig)
-	if err != nil {
-		return dbplugin.NewUserResponse{}, err
+// revokeToken adds the jti for the token to the revocation list and
+func revokeToken(ctx context.Context, c *kumaClient, storage logical.Storage, tokenType, jti, mesh string, expiry int64) error {
+	revList := &RevocationList{}
+
+	// first get the existing revocation list secret
+	if tokenType == kumaTokenDataplane {
+		err := revokeDataPlaneToken(ctx, c, jti, mesh)
+		if err != nil {
+			return err
+		}
 	}
 
-	client, err := m.Connection(ctx)
+	// we now need to add the token details to the internal secret, so that we can clean the
+	// revocation list later
+	se, err := storage.Get(ctx, kumaRevocationSecret)
 	if err != nil {
-		return dbplugin.NewUserResponse{}, err
+		return fmt.Errorf("unable to get revocations from internal storage: %s", err)
 	}
 
-	user := client.CreateUser(username, req.Password)
+	if se != nil {
+		se.DecodeJSON(revList)
+	}
 
-	resp := dbplugin.NewUserResponse{
-		Username: user.Username,
+	// add this token to the list
+	revList.Tokens = append(
+		revList.Tokens,
+		RevocationToken{
+			JTI:    jti,
+			Mesh:   mesh,
+			Expiry: expiry,
+		})
+
+	// update the secret
+	se, err = logical.StorageEntryJSON(kumaRevocationSecret, revList)
+	if err != nil {
+		return fmt.Errorf("unable to marshal revocation list: %s", err)
+	}
+
+	err = storage.Put(ctx, se)
+	if err != nil {
+		return fmt.Errorf("unable to store revocation list: %s", err)
+	}
+
+	return nil
+}
+
+func revokeDataPlaneToken(ctx context.Context, c *kumaClient, jti, mesh string) error {
+	jtis := []string{}
+	data, err := c.secretClient.Get(kumaGlobalSecretDataplaneRevocation + mesh)
+	if err != nil && err != GlobalSecretNotFound {
+		return fmt.Errorf("unable to get revocation token secret: %s", err)
+	}
+
+	jtiBytes, _ := base64.StdEncoding.DecodeString(data)
+	jtis = strings.Split(string(jtiBytes), ",")
+
+	jtis = append(jtis, jti)
+
+	data = base64.StdEncoding.EncodeToString([]byte(strings.Join(jtis, ",")))
+	err = c.secretClient.Put(kumaGlobalSecretDataplaneRevocation+mesh, string(data))
+	if err != nil {
+		return fmt.Errorf("unable to add jti to revocation list: %s", err)
+	}
+
+	return nil
+}
+
+// tokenRenew
+func (b *kumaBackend) tokenRenew(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+	roleRaw, ok := req.Secret.InternalData["role"]
+	if !ok {
+		return nil, fmt.Errorf("secret is missing role internal data")
+	}
+
+	// get the role entry
+	role := roleRaw.(string)
+	roleEntry, err := b.getRole(ctx, req.Storage, role)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving role: %w", err)
+	}
+
+	if roleEntry == nil {
+		return nil, errors.New("error retrieving role: role is nil")
+	}
+
+	resp := &logical.Response{Secret: req.Secret}
+
+	if roleEntry.TTL > 0 {
+		resp.Secret.TTL = roleEntry.TTL
+	}
+	if roleEntry.MaxTTL > 0 {
+		resp.Secret.MaxTTL = roleEntry.MaxTTL
 	}
 
 	return resp, nil
-}
-
-// UpdateUser updates an existing user/servv=ice within the dataplane.
-func (m *Kuma) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	if req.Password == nil {
-		return dbplugin.UpdateUserResponse{}, fmt.Errorf("no changes requested")
-	}
-
-	client, err := m.Connection(ctx)
-	if err != nil {
-		return dbplugin.UpdateUserResponse{}, err
-	}
-
-	err = client.UpdateUser(req.Username, req.Password.NewPassword)
-	if err != nil {
-		return dbplugin.UpdateUserResponse{}, err
-	}
-
-	return dbplugin.UpdateUserResponse{}, nil
-}
-
-// DeleteUser from the dataplane ie. add the user/service to the revocation list.
-// This should not error if the user didn't exist prior to this call.
-func (m *Kuma) DeleteUser(ctx context.Context, req dbplugin.DeleteUserRequest) (dbplugin.DeleteUserResponse, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	client, err := m.Connection(ctx)
-	if err != nil {
-		return dbplugin.DeleteUserResponse{}, err
-	}
-
-	err = client.DeleteUser(req.Username)
-	return dbplugin.DeleteUserResponse{}, err
 }

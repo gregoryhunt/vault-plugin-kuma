@@ -1,0 +1,50 @@
+name: Go
+
+on: [push]
+
+jobs:
+
+  build_plugin:
+    name: Build Plugin
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+
+      with:
+        go-version: 1.18
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+
+  functional_tests:
+    name: Run Functional Tests
+    runs-on: ubuntu-latest
+    needs:
+      - build_controller
+    strategy:
+      matrix:
+        tags:
+          - "@kuma_roles"
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18
+
+    - name: Setup Functional Tests
+      run: |
+        curl https://shipyard.run/install | bash
+
+    - name: Run Functional Tests
+      run: |
+        make build
+        cd functional_tests && go run . --godog.tags="${{ matrix.tags }}"

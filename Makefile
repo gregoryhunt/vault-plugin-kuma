@@ -1,5 +1,4 @@
-GOARCH = amd64
-
+ARCH = $(shell uname -m)
 UNAME = $(shell uname -s)
 
 ifndef OS
@@ -10,32 +9,89 @@ ifndef OS
 	endif
 endif
 
+ifndef GOARCH
+	ifeq ($(ARCH), aarch64)
+		GOARCH = arm64
+	else ifeq ($(ARCH), arm64)
+		GOARCH = arm64
+	else ifeq ($(ARCH), x86_64)
+		GOARCH = amd64
+	else
+		GOARCH = $(ARCH)
+	endif
+endif
+
 .DEFAULT_GOAL := all
 
 all: fmt build start
 
 build:
-	GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-database-kuma cmd/vault-plugin-kuma/main.go
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
+start_shipyard_env:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
+	shipyard run ./shipyard
+	@echo 'Ensure you set the environment variables using eval $(shipyard env) before running any further commands'
+
+restart_vault_shipyard:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
+	shipyard taint container.vault && shipyard run --no-browser ./shipyard
+
 enable:
-	vault secrets enable database
+	vault secrets enable -path=kuma vault-plugin-kuma || true
 
-	vault write database/config/kuma \
-    plugin_name=vault-plugin-kuma \
-		allowed_roles="kuma-role" \
-    username="vault" \
-    password="vault" \
-    connection_url="kuma.local:1234"
+	vault write kuma/config \
+		allowed_roles="kuma-role,kuma-role-globbed" \
+		url="http://kuma-cp.container.shipyard.run:5681" \
+		token="$(shell cat ~/.shipyard/data/kuma_config/admin.token)"
 
-	vault write database/roles/kuma-role \
-    db_name=kuma \
-    default_ttl="5m" \
+	# How to differentiate between user token role and dataplane role
+	vault write kuma/roles/kuma-role \
+		token_name="backend-1" \
+    mesh=default \
+		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
+    ttl="1m" \
     max_ttl="24h"
+
+	vault write kuma/roles/kuma-role-globbed \
+		token_name="backend-*" \
+    mesh=default \
+		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
+    ttl="5m" \
+    max_ttl="24h"
+
+	vault write kuma/roles/kuma-role-user \
+		token_name="nic" \
+    mesh=default \
+		groups="mesh-system:admin" \
+    ttl="5m" \
+    max_ttl="24h"
+
+test_token_generation:
+	vault read kuma/creds/kuma-role token_name=backend-1 || true
+	@echo ""
+	vault read kuma/creds/kuma-role-globbed || true
+	@echo ""
+	vault read kuma/creds/kuma-role-globbed token_name=backend-1 || true
+	@echo ""
+	vault read kuma/creds/kuma-role-user token_name=nic || true
+
+generate:
+	vault read kuma/creds/kuma-role -format=json | jq -r .data.token > $(HOME)/.shipyard/data/kuma_dp/dataplane.token
+	@echo "Token written to $(HOME)/.shipyard/data/kuma_dp/dataplane.token"
+
+run_dp:
+	docker exec -it kuma-dp.container.shipyard.run kuma-dp run --cp-address https://kuma-cp.container.shipyard.run:5678 --dataplane-file /files/dataplane.json --dataplane-token "$(shell cat $(HOME)/.shipyard/data/kuma_dp/dataplane.token)" --ca-cert-file /files/ca.cert
+
 clean:
-	rm -f ./vault/plugins/vault-plugin-kuma
+	rm -f ./vault/plugins/*
+
+tests:
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
+	cd functional_tests && go run main.go
 
 fmt:
 	go fmt $$(go list ./...)
