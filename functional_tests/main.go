@@ -110,7 +110,7 @@ func initializeSuite(ctx *godog.TestSuiteContext) {
 			return nil, cmdErr
 		}
 
-		cmd = exec.Command("shipyard", "run", "./shipyard")
+		cmd = exec.Command("shipyard", "run", "--no-browser", "./shipyard")
 		cmd.Dir = "../"
 		cmd.Stderr = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Error})
 		cmd.Stdout = logger.StandardWriter(&hclog.StandardLoggerOptions{ForceLevel: hclog.Debug})
