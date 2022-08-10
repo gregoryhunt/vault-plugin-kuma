@@ -46,14 +46,14 @@ enable:
 	vault write kuma/config \
 		allowed_roles="kuma-role,kuma-role-globbed" \
 		url="http://kuma-cp.container.shipyard.run:5681" \
-		token="$(KUMA_TOKEN)"
+		token="$(shell cat ~/.shipyard/data/kuma_config/admin.token)"
 
 	# How to differentiate between user token role and dataplane role
 	vault write kuma/roles/kuma-role \
 		token_name="backend-1" \
     mesh=default \
 		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
-    ttl="5m" \
+    ttl="1m" \
     max_ttl="24h"
 
 	vault write kuma/roles/kuma-role-globbed \

@@ -2,15 +2,24 @@ package kuma
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
-	kumaTokenAccountType = "kuma_token"
+	kumaTokenAccountType                = "kuma_token"
+	kumaRevocationSecret                = "kuma_revocations"
+	kumaTokenUser                       = "token_user"
+	kumaTokenDataplane                  = "token_dataplane"
+	kumaGlobalSecretDataplaneRevocation = "dataplane-token-revocations-"
+	kumaGlobalSecretUserRevocation      = ""
 )
 
 // kumaToken defines a secret to store for a given role
@@ -39,35 +48,153 @@ func (b *kumaBackend) tokenRevoke(ctx context.Context, req *logical.Request, d *
 		return nil, fmt.Errorf("error getting Kuma client")
 	}
 
-	var token string
+	var tokenJTI string
 	// We passed the jti using InternalData from when we first created
 	// the secret.
-	jti, ok := req.Secret.InternalData["token_id"]
+	jti, ok := req.Secret.InternalData["jti"]
 	if !ok {
-		return nil, fmt.Errorf("token_id is missing on the lease")
+		return nil, fmt.Errorf("jti is missing on the lease")
 	}
 
-	token, ok = jti.(string)
+	tokenJTI, ok = jti.(string)
 	if !ok {
-		return nil, fmt.Errorf("unable convert token_id")
+		return nil, fmt.Errorf("unable convert jti")
 	}
 
-	b.Logger().Warn("Token revocation is not yet implemented", "jti", jti)
-	if err := revokeToken(ctx, client, token); err != nil {
-		return nil, fmt.Errorf("error revoking kuma token: %w", err)
+	var tokenMesh string
+	// We passed the mesh using InternalData from when we first created
+	// the secret.
+	mes, ok := req.Secret.InternalData["mesh"]
+	if !ok {
+		return nil, fmt.Errorf("mesh is missing on the lease")
+	}
+
+	tokenMesh, ok = mes.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable convert mesh")
+	}
+
+	var tokenType string
+	// We passed the jti using InternalData from when we first created
+	// the secret.
+	typ, ok := req.Secret.InternalData["type"]
+	if !ok {
+		return nil, fmt.Errorf("type is missing on the lease")
+	}
+
+	tokenType, ok = typ.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable convert type")
+	}
+
+	var tokenExpiry int64
+	// We passed the jti using InternalData from when we first created
+	// the secret.
+	exp, ok := req.Secret.InternalData["expiry"]
+	if !ok {
+		return nil, fmt.Errorf("expiry is missing on the lease")
+	}
+
+	// convert the expiry
+	switch exp.(type) {
+	case int:
+		tokenExpiry = int64(exp.(int))
+	case int64:
+		tokenExpiry = exp.(int64)
+	case float64:
+		tokenExpiry = int64(exp.(float64))
+	default:
+		return nil, fmt.Errorf("unable to convert expiry to int64 %s", reflect.TypeOf(exp))
+	}
+
+	// if the ttl on the token has not elapsed we need to add this token to
+	// the revocation list
+	b.Logger().Info("Revoking Token", "jti", tokenJTI, "type", tokenType, "mesh", tokenMesh, "expiry", time.Unix(0, tokenExpiry).String())
+
+	if time.Now().Sub(time.Unix(0, tokenExpiry)) < 0 {
+		b.Logger().Info("Token has not expired, revoke token in Kuma API", "jti", tokenJTI, "type", tokenType, "mesh", tokenMesh, "expiry", time.Unix(0, tokenExpiry).String())
+
+		if err := revokeToken(ctx, client, req.Storage, tokenType, tokenJTI, tokenMesh, tokenExpiry); err != nil {
+			return nil, fmt.Errorf("error revoking kuma token: %w", err)
+		}
 	}
 
 	return nil, nil
 }
 
-// revokeToken checks to see if a token has expired, if not it adds it to Kuma's revocation list
-// if the token is expired this operation is a noop
-func revokeToken(ctx context.Context, c *kumaClient, jti string) error {
-	//err := c.RESTClient.DeleteRobotAccountByName(ctx, robotAccountName)
+type RevocationList struct {
+	Tokens []RevocationToken `json:"tokens"`
+}
 
-	//if err != nil {
-	//	return err
-	//}
+type RevocationToken struct {
+	JTI    string `json:"jti"`
+	Mesh   string `json:"mesh"`
+	Expiry int64  `json:"expiry"`
+}
+
+// revokeToken adds the jti for the token to the revocation list and
+func revokeToken(ctx context.Context, c *kumaClient, storage logical.Storage, tokenType, jti, mesh string, expiry int64) error {
+	revList := &RevocationList{}
+
+	// first get the existing revocation list secret
+	if tokenType == kumaTokenDataplane {
+		err := revokeDataPlaneToken(ctx, c, jti, mesh)
+		if err != nil {
+			return err
+		}
+	}
+
+	// we now need to add the token details to the internal secret, so that we can clean the
+	// revocation list later
+	se, err := storage.Get(ctx, kumaRevocationSecret)
+	if err != nil {
+		return fmt.Errorf("unable to get revocations from internal storage: %s", err)
+	}
+
+	if se != nil {
+		se.DecodeJSON(revList)
+	}
+
+	// add this token to the list
+	revList.Tokens = append(
+		revList.Tokens,
+		RevocationToken{
+			JTI:    jti,
+			Mesh:   mesh,
+			Expiry: expiry,
+		})
+
+	// update the secret
+	se, err = logical.StorageEntryJSON(kumaRevocationSecret, revList)
+	if err != nil {
+		return fmt.Errorf("unable to marshal revocation list: %s", err)
+	}
+
+	err = storage.Put(ctx, se)
+	if err != nil {
+		return fmt.Errorf("unable to store revocation list: %s", err)
+	}
+
+	return nil
+}
+
+func revokeDataPlaneToken(ctx context.Context, c *kumaClient, jti, mesh string) error {
+	jtis := []string{}
+	data, err := c.secretClient.Get(kumaGlobalSecretDataplaneRevocation + mesh)
+	if err != nil && err != GlobalSecretNotFound {
+		return fmt.Errorf("unable to get revocation token secret: %s", err)
+	}
+
+	jtiBytes, _ := base64.StdEncoding.DecodeString(data)
+	jtis = strings.Split(string(jtiBytes), ",")
+
+	jtis = append(jtis, jti)
+
+	data = base64.StdEncoding.EncodeToString([]byte(strings.Join(jtis, ",")))
+	err = c.secretClient.Put(kumaGlobalSecretDataplaneRevocation+mesh, string(data))
+	if err != nil {
+		return fmt.Errorf("unable to add jti to revocation list: %s", err)
+	}
 
 	return nil
 }
