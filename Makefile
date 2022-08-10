@@ -53,8 +53,8 @@ enable:
 		token_name="backend-1" \
     mesh=default \
 		tags="kuma.io/service=backend,kuma.io/service=backend-admin" \
-    ttl="1m" \
-    max_ttl="24h"
+    ttl="30s" \
+    max_ttl="2m"
 
 	vault write kuma/roles/kuma-role-globbed \
 		token_name="backend-*" \
