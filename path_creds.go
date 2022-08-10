@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gobwas/glob"
 	"github.com/hashicorp/vault/sdk/framework"
@@ -108,6 +109,7 @@ func (b *kumaBackend) createCreds(
 	}
 
 	token := ""
+	tokenType := ""
 
 	// if tags generate a dataplane token
 	if len(role.Tags) > 0 {
@@ -119,11 +121,12 @@ func (b *kumaBackend) createCreds(
 		}
 
 		token = t
+		tokenType = kumaTokenDataplane
 	}
 
 	// if groups generate a user token
 	if len(role.Groups) > 0 {
-		b.Logger().Info("Generate user token", "tags", role.Tags)
+		b.Logger().Info("Generate user token", "groups", role.Groups)
 		t, err := client.userTokenClient.Generate(name, role.Groups, role.MaxTTL)
 
 		if err != nil {
@@ -131,6 +134,7 @@ func (b *kumaBackend) createCreds(
 		}
 
 		token = t
+		tokenType = kumaTokenUser
 	}
 
 	// parse the token to get the jti, we need this to revoke tokens
@@ -148,13 +152,17 @@ func (b *kumaBackend) createCreds(
 	}
 
 	// The response is divided into two objects (1) internal data and (2) data.
+	// add the jti and the expiry time in seconds to the collection so we can use if as part of the revocation process
 	resp := b.Secret(kumaTokenAccountType).Response(
 		map[string]interface{}{
 			"token": token,
 		},
 		map[string]interface{}{
-			"role":     roleName,
-			"token_id": tokenID,
+			"role":   roleName,
+			"jti":    tokenID,
+			"expiry": time.Now().Add(role.MaxTTL).UnixNano(),
+			"type":   tokenType,
+			"mesh":   role.Mesh,
 		},
 	)
 
