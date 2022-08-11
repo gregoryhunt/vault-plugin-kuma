@@ -1,6 +1,6 @@
 name: Go
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
 
@@ -47,6 +47,9 @@ jobs:
       matrix:
         tags:
           - "@kuma_roles"
+          - "@kuma_dataplane_token"
+          - "@kuma_dataplane_token_globbed"
+          - "@kuma_user_token"
     steps:
 
     - uses: actions/checkout@v2
