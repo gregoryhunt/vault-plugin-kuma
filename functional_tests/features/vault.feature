@@ -57,7 +57,6 @@ Feature: Kuma User Tokens
     Then I should be able to start a dataplane using the token
     And a dataplane should be registered called "backend-1"
 
-
   @kuma_user_token
   Scenario: Create user tokens
     Given I create the Vault role "kuma-user-role" with the following data
