@@ -19,8 +19,8 @@ Feature: Kuma User Tokens
       {
         "token_name": "backend-1",
         "mesh": "default",
-        "ttl": "1h0m0s",
-        "max_ttl": "24h0m0s",
+        "ttl": 3600,
+        "max_ttl": 86400,
         "tags": "kuma.io/service=backend,kuma.io/service=backend-admin"
       }
       ```
