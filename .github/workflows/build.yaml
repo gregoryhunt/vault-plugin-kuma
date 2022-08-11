@@ -1,6 +1,6 @@
 name: Go
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
 
@@ -19,8 +19,24 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-    - name: Test
-      run: go test -v ./...
+  unit_tests:
+    name: Test and coverage
+    runs-on: ubuntu-latest
+    needs:
+      - build_plugin
+    steps:
+
+    - uses: actions/checkout@v2
+  
+    - uses: actions/setup-go@v2
+      with:
+        go-version: '1.18'
+    
+    - name: Run coverage
+      run: go test -race -coverprofile=coverage.out -covermode=atomic
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
 
   functional_tests:
     name: Run Functional Tests
@@ -31,6 +47,9 @@ jobs:
       matrix:
         tags:
           - "@kuma_roles"
+          - "@kuma_dataplane_token"
+          - "@kuma_dataplane_token_globbed"
+          - "@kuma_user_token"
     steps:
 
     - uses: actions/checkout@v2
