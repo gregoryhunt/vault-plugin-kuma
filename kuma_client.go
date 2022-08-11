@@ -19,9 +19,10 @@ import (
 // harborClient creates an object storing
 // the client.
 type kumaClient struct {
-	dpTokenClient   tokens.DataplaneTokenClient
-	userTokenClient userclient.UserTokenClient
-	secretClient    *GlobalSecretsClient
+	dpTokenClient      tokens.DataplaneTokenClient
+	userTokenClient    userclient.UserTokenClient
+	globalSecretClient *GlobalSecretsClient
+	meshSecretClient   *SecretsClient
 }
 
 type ProxyType string
@@ -53,9 +54,10 @@ func newClient(config *kumaConfig) (*kumaClient, error) {
 
 	dpc := tokens.NewDataplaneTokenClient(apiclient)
 	uc := userclient.NewHTTPUserTokenClient(apiclient)
-	rs := NewGlobalSecretsClient(apiclient)
+	gs := NewGlobalSecretsClient(apiclient)
+	ms := NewSecretsClient(apiclient)
 
-	return &kumaClient{dpc, uc, rs}, nil
+	return &kumaClient{dpc, uc, gs, ms}, nil
 }
 
 func baseAPIServerClient(url, token string) (util_http.Client, error) {
@@ -94,7 +96,7 @@ var GlobalSecretNotFound = fmt.Errorf("Global Secret Not Found")
 type GlobalSecret struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
-	Data string `json:data"`
+	Data string `json:"data"`
 }
 
 // Get a Global Secret store and return the base64encoded data
@@ -129,7 +131,17 @@ func (sc *GlobalSecretsClient) Get(name string) (string, error) {
 }
 
 func (sc *GlobalSecretsClient) Put(name, data string) error {
-	req, err := http.NewRequest(http.MethodPut, "/global-secrets/"+name, bytes.NewReader([]byte(data)))
+	path := "/global-secrets/" + name
+
+	body := &GlobalSecret{
+		Type: "GlobalSecret",
+		Name: name,
+		Data: data,
+	}
+
+	d, _ := json.Marshal(body)
+
+	req, err := http.NewRequest(http.MethodPut, path, bytes.NewReader(d))
 	if err != nil {
 		return fmt.Errorf("unable to create request for global secrets: %s", err)
 	}
@@ -143,11 +155,92 @@ func (sc *GlobalSecretsClient) Put(name, data string) error {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK || resp.StatusCode == http.StatusCreated {
-		d, _ := ioutil.ReadAll(resp.Body)
-
-		return fmt.Errorf("expected statuscode %d, got %d, body: %s", http.StatusOK, resp.StatusCode, string(d))
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
+		return nil
 	}
 
-	return nil
+	d, _ = ioutil.ReadAll(resp.Body)
+	return fmt.Errorf("expected statuscode %d, got %d, path: %s, body: %s", http.StatusOK, resp.StatusCode, path, string(d))
+}
+
+type SecretsClient struct {
+	client util_http.Client
+}
+
+func NewSecretsClient(c util_http.Client) *SecretsClient {
+	return &SecretsClient{c}
+}
+
+var SecretNotFound = fmt.Errorf("Secret Not Found")
+
+type Secret struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+	Mesh string `json:"mesh"`
+	Data string `json:"data"`
+}
+
+// Get a Secret store and return the base64encoded data
+func (sc *SecretsClient) Get(mesh, name string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/meshes/%s/secrets/%s", mesh, name), nil)
+	if err != nil {
+		return "", fmt.Errorf("unable to create request for secrets: %s", err)
+	}
+
+	resp, err := sc.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("unable to execute request for secrets: %s", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "", SecretNotFound
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("expected statuscode %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	defer resp.Body.Close()
+
+	data := &GlobalSecret{}
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return "", fmt.Errorf("unable to decode response: %s", err)
+	}
+
+	return data.Data, nil
+}
+
+func (sc *SecretsClient) Put(mesh, name, data string) error {
+	path := fmt.Sprintf("/meshes/%s/secrets/%s", mesh, name)
+
+	body := &Secret{
+		Type: "Secret",
+		Name: name,
+		Mesh: mesh,
+		Data: data,
+	}
+
+	d, _ := json.Marshal(body)
+
+	req, err := http.NewRequest(http.MethodPut, path, bytes.NewReader(d))
+	if err != nil {
+		return fmt.Errorf("unable to create request for secrets: %s", err)
+	}
+
+	req.Header["content-type"] = []string{"application/json"}
+
+	resp, err := sc.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("unable to execute request for secrets: %s", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
+		return nil
+	}
+
+	d, _ = ioutil.ReadAll(resp.Body)
+	return fmt.Errorf("expected statuscode %d, got %d, path: %s, body: %s", http.StatusOK, resp.StatusCode, path, string(d))
 }

@@ -14,12 +14,12 @@ import (
 )
 
 const (
-	kumaTokenAccountType                = "kuma_token"
-	kumaRevocationSecret                = "kuma_revocations"
-	kumaTokenUser                       = "token_user"
-	kumaTokenDataplane                  = "token_dataplane"
-	kumaGlobalSecretDataplaneRevocation = "dataplane-token-revocations-"
-	kumaGlobalSecretUserRevocation      = ""
+	kumaTokenAccountType              = "kuma_token"
+	kumaRevocationSecret              = "kuma_revocations"
+	kumaTokenUser                     = "token_user"
+	kumaTokenDataplane                = "token_dataplane"
+	kumaMeshSecretDataplaneRevocation = "dataplane-token-revocations-"
+	kumaGlobalSecretUserRevocation    = "user-token-revocations"
 )
 
 // kumaToken defines a secret to store for a given role
@@ -122,7 +122,7 @@ func (b *kumaBackend) tokenRevoke(ctx context.Context, req *logical.Request, d *
 	return nil, nil
 }
 
-type RevocationList struct {
+type RevocationListSecret struct {
 	Tokens []RevocationToken `json:"tokens"`
 }
 
@@ -130,15 +130,23 @@ type RevocationToken struct {
 	JTI    string `json:"jti"`
 	Mesh   string `json:"mesh"`
 	Expiry int64  `json:"expiry"`
+	Type   string `json:"type"`
 }
 
 // revokeToken adds the jti for the token to the revocation list and
 func revokeToken(ctx context.Context, c *kumaClient, storage logical.Storage, tokenType, jti, mesh string, expiry int64) error {
-	revList := &RevocationList{}
+	revList := &RevocationListSecret{}
 
 	// first get the existing revocation list secret
 	if tokenType == kumaTokenDataplane {
 		err := revokeDataPlaneToken(ctx, c, jti, mesh)
+		if err != nil {
+			return err
+		}
+	}
+
+	if tokenType == kumaTokenUser {
+		err := revokeUserToken(ctx, c, jti)
 		if err != nil {
 			return err
 		}
@@ -162,6 +170,7 @@ func revokeToken(ctx context.Context, c *kumaClient, storage logical.Storage, to
 			JTI:    jti,
 			Mesh:   mesh,
 			Expiry: expiry,
+			Type:   tokenType,
 		})
 
 	// update the secret
@@ -180,18 +189,45 @@ func revokeToken(ctx context.Context, c *kumaClient, storage logical.Storage, to
 
 func revokeDataPlaneToken(ctx context.Context, c *kumaClient, jti, mesh string) error {
 	jtis := []string{}
-	data, err := c.secretClient.Get(kumaGlobalSecretDataplaneRevocation + mesh)
-	if err != nil && err != GlobalSecretNotFound {
+	data, err := c.meshSecretClient.Get(mesh, kumaMeshSecretDataplaneRevocation+mesh)
+	if err != nil && err != SecretNotFound {
 		return fmt.Errorf("unable to get revocation token secret: %s", err)
 	}
 
-	jtiBytes, _ := base64.StdEncoding.DecodeString(data)
-	jtis = strings.Split(string(jtiBytes), ",")
+	// if we have existing secret merge
+	if err == nil {
+		jtiBytes, _ := base64.StdEncoding.DecodeString(data)
+		jtis = strings.Split(string(jtiBytes), ",")
+	}
 
 	jtis = append(jtis, jti)
 
 	data = base64.StdEncoding.EncodeToString([]byte(strings.Join(jtis, ",")))
-	err = c.secretClient.Put(kumaGlobalSecretDataplaneRevocation+mesh, string(data))
+	err = c.meshSecretClient.Put(mesh, kumaMeshSecretDataplaneRevocation+mesh, string(data))
+	if err != nil {
+		return fmt.Errorf("unable to add jti to revocation list: %s", err)
+	}
+
+	return nil
+}
+
+func revokeUserToken(ctx context.Context, c *kumaClient, jti string) error {
+	jtis := []string{}
+	data, err := c.globalSecretClient.Get(kumaGlobalSecretUserRevocation)
+	if err != nil && err != GlobalSecretNotFound {
+		return fmt.Errorf("unable to get revocation token secret: %s", err)
+	}
+
+	// if we have existing secret merge
+	if err == nil {
+		jtiBytes, _ := base64.StdEncoding.DecodeString(data)
+		jtis = strings.Split(string(jtiBytes), ",")
+	}
+
+	jtis = append(jtis, jti)
+
+	data = base64.StdEncoding.EncodeToString([]byte(strings.Join(jtis, ",")))
+	err = c.globalSecretClient.Put(kumaGlobalSecretUserRevocation, string(data))
 	if err != nil {
 		return fmt.Errorf("unable to add jti to revocation list: %s", err)
 	}
