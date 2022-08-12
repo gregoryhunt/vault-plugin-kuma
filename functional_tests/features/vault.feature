@@ -19,8 +19,8 @@ Feature: Kuma User Tokens
       {
         "token_name": "backend-1",
         "mesh": "default",
-        "ttl": "1h0m0s",
-        "max_ttl": "24h0m0s",
+        "ttl": 3600,
+        "max_ttl": 86400,
         "tags": "kuma.io/service=backend,kuma.io/service=backend-admin"
       }
       ```
@@ -56,7 +56,6 @@ Feature: Kuma User Tokens
     And I create a token for the role "kuma-dataplane-role-globbed" with the k/v "token_name=backend-1"
     Then I should be able to start a dataplane using the token
     And a dataplane should be registered called "backend-1"
-
 
   @kuma_user_token
   Scenario: Create user tokens

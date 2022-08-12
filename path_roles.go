@@ -41,8 +41,8 @@ func (r *kumaRoleEntry) toResponseData() map[string]interface{} {
 	respData := map[string]interface{}{
 		"token_name": r.TokenName,
 		"mesh":       r.Mesh,
-		"ttl":        r.TTL.String(),
-		"max_ttl":    r.MaxTTL.String(),
+		"ttl":        r.TTL.Seconds(),
+		"max_ttl":    r.MaxTTL.Seconds(),
 	}
 
 	if tags != "" {

@@ -48,7 +48,7 @@ func pathCreds(b *kumaBackend) *framework.Path {
 	}
 }
 
-// pathCredentialsRead creates a new Harbor robot account each time it is called if a
+// pathCredentialsRead creates a new Kuma Token each time it is called if a
 // role exists.
 func (b *kumaBackend) pathCredsRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	roleName := d.Get("name").(string)
