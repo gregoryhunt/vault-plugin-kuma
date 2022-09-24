@@ -128,6 +128,13 @@ jobs:
         with:
           name: plugin_artifacts
           path: ./artifacts
+      
+      - id: check_pr_labels
+        uses: nicholasjackson/check-pr-labels-on-push-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          labels: '["patch", "minor", "major"]'
+          match-any: 'true'
 
       - name: Bump version and push tag
         id: tag_version
@@ -144,13 +151,6 @@ jobs:
           tar -czf ./artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.tgz ./artifacts/vault-plugin-kuma-linux-arm64
           tar -czf ./artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.tgz ./artifacts/vault-plugin-kuma-linux-amd64
           zip ./artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip ./artifacts/vault-plugin-kuma-windows-amd64.exe
-
-      - id: check_pr_labels
-        uses: nicholasjackson/check-pr-labels-on-push-action@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          labels: '["patch", "minor", "major"]'
-          match-any: 'true'
 
       - name: Bump version and push tag
         id: create_tag
