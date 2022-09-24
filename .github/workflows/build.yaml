@@ -90,7 +90,7 @@ jobs:
           name: plugin_artifacts
           path: |
             bin/vault-plugin-kuma-darwin-arm64
-            bin/vault-plugin-kuma-darwin_amd64
+            bin/vault-plugin-kuma-darwin-amd64
             bin/vault-plugin-kuma-linux-amd64
             bin/vault-plugin-kuma-linux-arm64
             bin/vault-plugin-kuma-windows-amd64.exe
