@@ -84,13 +84,41 @@ jobs:
       - name: Build multiple versions
         run: make build_all
 
+      -
+        name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.GPG_SIGNING_KEY }}
+          passphrase: ${{ secrets.GPG_SIGNING_PASSWORD }}
+      
+      - name: Zip Artifacts
+        run: |
+          zip bin/vault-plugin-kuma-darwin-arm64.zip bin/vault-plugin-kuma-darwin-arm64
+          zip bin/vault-plugin-kuma-darwin-amd64.zip bin/vault-plugin-kuma-darwin-amd64
+          zip bin/vault-plugin-kuma-linux-arm64.zip bin/vault-plugin-kuma-linux-arm64
+          zip bin/vault-plugin-kuma-linux-amd64.zip bin/vault-plugin-kuma-linux-amd64
+          zip bin/vault-plugin-kuma-windows-amd64.zip bin/vault-plugin-kuma-windows-amd64.exe
+    
+      - name: Generate checksums
+        run: |
+          sha256sum bin/vault-plugin-kuma-darwin-arm64.zip >> bin/vault-plugin-kuma_SHA256SUMS
+          sha256sum bin/vault-plugin-kuma-darwin-amd64.zip >> bin/vault-plugin-kuma_SHA256SUMS
+          sha256sum bin/vault-plugin-kuma-linux-arm64.zip >> bin/vault-plugin-kuma_SHA256SUMS
+          sha256sum bin/vault-plugin-kuma-linux-amd64.zip >> bin/vault-plugin-kuma_SHA256SUMS
+          sha256sum bin/vault-plugin-kuma-windows-amd64.zip >> bin/vault-plugin-kuma_SHA256SUMS
+      
+      - name: Sign the checksum file
+        run: |
+          gpg --output ./bin/vault-plugin-kuma-darwin_SHA256SUMS.sig --detach-sig ./bin/vault-plugin-kuma-darwin_SHA256SUMS
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: plugin_artifacts
           path: |
             bin/vault-plugin-kuma-darwin-arm64
-            bin/vault-plugin-kuma-darwin_amd64
+            bin/vault-plugin-kuma-darwin-amd64
             bin/vault-plugin-kuma-linux-amd64
             bin/vault-plugin-kuma-linux-arm64
             bin/vault-plugin-kuma-windows-amd64.exe
@@ -128,6 +156,21 @@ jobs:
         with:
           name: plugin_artifacts
           path: ./artifacts
+      
+      - id: check_pr_labels
+        uses: nicholasjackson/check-pr-labels-on-push-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          labels: '["patch", "minor", "major"]'
+          match-any: 'true'
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          dry_run: true
+          default_bump: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
     
       - name: Zip Artifacts
         run: |
@@ -136,13 +179,6 @@ jobs:
           tar -czf ./artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.tgz ./artifacts/vault-plugin-kuma-linux-arm64
           tar -czf ./artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.tgz ./artifacts/vault-plugin-kuma-linux-amd64
           zip ./artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip ./artifacts/vault-plugin-kuma-windows-amd64.exe
-
-      - id: check_pr_labels
-        uses: nicholasjackson/check-pr-labels-on-push-action@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          labels: '["patch", "minor", "major"]'
-          match-any: 'true'
 
       - name: Bump version and push tag
         id: create_tag
