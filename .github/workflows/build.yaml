@@ -114,7 +114,7 @@ jobs:
       pr_first_label: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
 
   # Only release application if there is a valid label on the PR
-  release:
+  create_release:
     name: Build and Release
     runs-on: ubuntu-latest
     needs:
