@@ -28,6 +28,13 @@ all: fmt build start
 build:
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH="$(GOARCH)" go build -o vault/plugins/vault-plugin-kuma cmd/vault-plugin-kuma/main.go
 
+build_all:
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/vault-plugin-kuma-linux-arm64 cmd/vault-plugin-kuma/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/vault-plugin-kuma-linux-amd64 cmd/vault-plugin-kuma/main.go
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o bin/vault-plugin-kuma-darwin-arm64 cmd/vault-plugin-kuma/main.go
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o bin/vault-plugin-kuma-darwin-amd64 cmd/vault-plugin-kuma/main.go
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/vault-plugin-kuma-windows-amd64.exe cmd/vault-plugin-kuma/main.go
+
 start:
 	vault server -dev -dev-root-token-id=root -dev-plugin-dir=./vault/plugins
 
