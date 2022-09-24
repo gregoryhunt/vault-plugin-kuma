@@ -109,7 +109,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           labels: '["patch", "minor", "major"]'
           match-any: 'true'
-    
     outputs:
       pr_labels_set: ${{ steps.check_pr_labels.outputs.result }}
       pr_first_label: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
