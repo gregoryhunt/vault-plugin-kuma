@@ -113,7 +113,6 @@ jobs:
       pr_labels_set: ${{ steps.check_pr_labels.outputs.result }}
       pr_first_label: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
 
-  # Only release application if there is a valid label on the PR
   create_release:
     name: Build and Release
     runs-on: ubuntu-latest
@@ -138,24 +137,24 @@ jobs:
           tar -czf /artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-linux-amd64
           zip /artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip /artifacts/vault-plugin-kuma-windows-amd64.exe
 
-    - id: check_pr_labels
-      uses: nicholasjackson/check-pr-labels-on-push-action@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        labels: '["patch", "minor", "major"]'
-        match-any: 'true'
+      - id: check_pr_labels
+        uses: nicholasjackson/check-pr-labels-on-push-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          labels: '["patch", "minor", "major"]'
+          match-any: 'true'
 
-    - name: Bump version and push tag
-      id: create_tag
-      uses: mathieudutour/github-tag-action@v6.0
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        default_bump: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
+      - name: Bump version and push tag
+        id: create_tag
+        uses: mathieudutour/github-tag-action@v6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
 
-          #- name: Release
-          #  uses: softprops/action-gh-release@v1
-          #  with:
-          #    tag_name: ${{ steps.tag_version.outputs.new_tag }}
-          #    token: ${{ secrets.GH_TOKEN }}
-          #    files: |
-          #      ./consul-release-controller-${{ steps.tag_version.outputs.new_version }}.tgz
+            #- name: Release
+            #  uses: softprops/action-gh-release@v1
+            #  with:
+            #    tag_name: ${{ steps.tag_version.outputs.new_tag }}
+            #    token: ${{ secrets.GH_TOKEN }}
+            #    files: |
+            #      ./consul-release-controller-${{ steps.tag_version.outputs.new_version }}.tgz
