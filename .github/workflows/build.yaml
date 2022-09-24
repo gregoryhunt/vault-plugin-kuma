@@ -121,22 +121,22 @@ jobs:
       - check_labels
       - create_artifacts
     if: ${{ needs.check_labels.outputs.pr_labels_set == 'true' }}
+    steps:
+      - uses: actions/checkout@v2
 
-    - uses: actions/checkout@v2
-
-    - name: Download-Binaries
-      uses: actions/download-artifact@v2
-      with:
-        name: plugin_artifacts
-        path: /artifacts
+      - name: Download-Binaries
+        uses: actions/download-artifact@v2
+        with:
+          name: plugin_artifacts
+          path: /artifacts
     
-    - name: Zip Artifacts
-      run: |
-        tar -czf /artifacts/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-darwin-arm64
-        tar -czf /artifacts/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-darwin-amd64
-        tar -czf /artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-linux-arm64
-        tar -czf /artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-linux-amd64
-        zip /artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip /artifacts/vault-plugin-kuma-windows-amd64.exe
+      - name: Zip Artifacts
+        run: |
+          tar -czf /artifacts/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-darwin-arm64
+          tar -czf /artifacts/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-darwin-amd64
+          tar -czf /artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-linux-arm64
+          tar -czf /artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.tgz /artifacts/vault-plugin-kuma-linux-amd64
+          zip /artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip /artifacts/vault-plugin-kuma-windows-amd64.exe
 
     - id: check_pr_labels
       uses: nicholasjackson/check-pr-labels-on-push-action@master
