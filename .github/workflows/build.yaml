@@ -110,7 +110,7 @@ jobs:
       
       - name: Sign the checksum file
         run: |
-          gpg --output ./bin/vault-plugin-kuma-darwin_SHA256SUMS.sig --detach-sig ./bin/vault-plugin-kuma-darwin_SHA256SUMS
+          gpg --output ./bin/vault-plugin-kuma_SHA256SUMS.sig --detach-sig ./bin/vault-plugin-kuma_SHA256SUMS
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
