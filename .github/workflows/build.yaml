@@ -154,23 +154,23 @@ jobs:
       
       - name: Zip Artifacts
         run: |
-          zip bin/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip bin/vault-plugin-kuma-darwin-arm64
-          zip bin/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip bin/vault-plugin-kuma-darwin-amd64
-          zip bin/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip bin/vault-plugin-kuma-linux-arm64
-          zip bin/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip bin/vault-plugin-kuma-linux-amd64
-          zip bin/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip bin/vault-plugin-kuma-windows-amd64.exe
+          zip artifacts/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip artifacts/vault-plugin-kuma-darwin-arm64
+          zip artifacts/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip artifacts/vault-plugin-kuma-darwin-amd64
+          zip artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip artifacts/vault-plugin-kuma-linux-arm64
+          zip artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip artifacts/vault-plugin-kuma-linux-amd64
+          zip artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip artifacts/vault-plugin-kuma-windows-amd64.exe
     
       - name: Generate checksums
         run: |
-          sha256sum bin/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip >> bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
-          sha256sum bin/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip >> bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
-          sha256sum bin/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip >> bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
-          sha256sum bin/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip >> bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
-          sha256sum bin/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip >> bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+          sha256sum artifacts/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip >> artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+          sha256sum artifacts/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip >> artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+          sha256sum artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip >> artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+          sha256sum artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip >> artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+          sha256sum artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip >> artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
       
       - name: Sign the checksum file
         run: |
-          gpg --output ./bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS.sig --detach-sig ./bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+          gpg --output artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS.sig --detach-sig artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
 
       - name: Bump version and push tag
         id: create_tag
@@ -185,10 +185,10 @@ jobs:
           tag_name: ${{ steps.tag_version.outputs.new_tag }}
           token: ${{ secrets.GH_TOKEN }}
           files: |
-            zip bin/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip
-            zip bin/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip
-            zip bin/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip
-            zip bin/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip
-            zip bin/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip
-            zip bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
-            zip bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS.sig
+            artifacts/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip
+            artifacts/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip
+            artifacts/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip
+            artifacts/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip
+            artifacts/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip
+            artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+            artifacts/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS.sig
