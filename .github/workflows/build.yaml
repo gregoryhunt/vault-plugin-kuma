@@ -179,16 +179,16 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: ${{ fromJson(steps.check_pr_labels.outputs.labels)[0] }}
 
-     - name: Release
-       uses: softprops/action-gh-release@v1
-       with:
-         tag_name: ${{ steps.tag_version.outputs.new_tag }}
-         token: ${{ secrets.GH_TOKEN }}
-         files: |
-           zip bin/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip
-           zip bin/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip
-           zip bin/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip
-           zip bin/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip
-           zip bin/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip
-           zip bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
-           zip bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS.sig
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          token: ${{ secrets.GH_TOKEN }}
+          files: |
+            zip bin/vault-plugin-kuma-darwin-arm64-${{ steps.tag_version.outputs.new_version }}.zip
+            zip bin/vault-plugin-kuma-darwin-amd64-${{ steps.tag_version.outputs.new_version }}.zip
+            zip bin/vault-plugin-kuma-linux-arm64-${{ steps.tag_version.outputs.new_version }}.zip
+            zip bin/vault-plugin-kuma-linux-amd64-${{ steps.tag_version.outputs.new_version }}.zip
+            zip bin/vault-plugin-kuma-windows-amd64-${{ steps.tag_version.outputs.new_version }}.zip
+            zip bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS
+            zip bin/vault-plugin-kuma-${{ steps.tag_version.outputs.new_version }}_SHA256SUMS.sig
